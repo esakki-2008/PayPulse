@@ -11,7 +11,7 @@ describe("getPayPalSandboxConfig", () => {
     PAYPAL_CLIENT_ID: "unit-test-client-id",
     PAYPAL_CLIENT_SECRET: "unit-test-credential",
     PAYPAL_ENVIRONMENT: "sandbox",
-  } as NodeJS.ProcessEnv;
+  };
 
   it("accepts only Sandbox configuration and pins the official endpoint", () => {
     const config = getPayPalSandboxConfig(sandboxEnvironment);
@@ -25,7 +25,7 @@ describe("getPayPalSandboxConfig", () => {
     const environment = {
       ...sandboxEnvironment,
       PAYPAL_CLIENT_SECRET: "",
-    } as NodeJS.ProcessEnv;
+    };
 
     expect(() => getPayPalSandboxConfig(environment)).toThrow(
       PayPalConfigurationError,
@@ -39,7 +39,7 @@ describe("getPayPalSandboxConfig", () => {
     const environment = {
       ...sandboxEnvironment,
       PAYPAL_ENVIRONMENT: "live",
-    } as NodeJS.ProcessEnv;
+    };
 
     expect(() => getPayPalSandboxConfig(environment)).toThrow(
       PayPalConfigurationError,

@@ -2,38 +2,49 @@
 
 > **Every payment has a pulse. We make it actionable.**
 
-PayPulse is an AI Payment Intelligence & Action Agent designed for the PayPal AI Hackathon. It turns PayPal **Sandbox** transaction behavior into explainable customer-level **Payment DNA**, detects meaningful change, predicts business risk/opportunity, and prepares merchant-approved actions.
+PayPulse is an AI Payment Intelligence & Action Agent for the PayPal AI Hackathon. It turns merchant payment behavior into explainable **Payment DNA**, prioritizes meaningful change, and prepares human-approved next actions.
 
-## Phase 1 status
+## Current status — Phase 3 foundation
 
-Phase 1 is complete: this repository currently contains the product and engineering blueprint only. No application, credentials, or live-money integration has been implemented.
+The working Phase 3 experience is an immersive, responsive command center with a 3D Payment Intelligence Core, Payment Universe, customer Payment DNA views, explainable intelligence signals, and an approval-gated Action Center.
 
-Read the complete blueprint here:
+All UI payment intelligence is clearly marked as **synthetic demo data**. PayPal Sandbox OAuth is server-only and independently verifiable, but Phase 3 does not query transaction APIs, create orders, or execute any financial action.
 
-- **[Phase 1 Engineering Blueprint](docs/PHASE_1_ENGINEERING_BLUEPRINT.md)**
+### Run the command center
 
-The blueprint defines:
+```bash
+npm install
+npm run dev
+```
 
-- Product vision, target users, user journey, full feature scope, and MVP cut line
-- Payment DNA model, explainable AI architecture, and human approval model
-- Sandbox-only PayPal integration boundaries and action execution controls
-- System/component architecture, data flows, PostgreSQL schema, API plan, and project structure
-- UI screens, state approach, demo narrative, testing, deployment, risks, and Definition of Done
-- A final Phase 1 Completion Report and exact recommended order for Phase 2
-
-## Non-negotiable safety boundary
+## Safety boundary
 
 PayPulse is designed for **PayPal Sandbox only** during development and demonstration:
 
-- No real-money transactions
-- No hard-coded PayPal or AI credentials
+- No real-money transactions or live PayPal endpoint
+- No hard-coded credentials or browser-visible secrets
 - No autonomous financially sensitive action
-- Every proposed action follows **WHY → WHAT → EXPECTED IMPACT → APPROVAL**
+- Every recommendation follows **WHY → WHAT → EXPECTED IMPACT → APPROVAL**
+- Phase 3 action execution is explicitly disabled; an approval does not trigger PayPal
+
+## Documentation
+
+- **[Phase 1 Engineering Blueprint](docs/PHASE_1_ENGINEERING_BLUEPRINT.md)**
+- **[Phase 2 PayPal Sandbox local setup](docs/PAYPAL_SANDBOX_LOCAL_SETUP.md)**
+- **[Phase 2 OAuth connectivity verification](docs/PAYPAL_SANDBOX_CONNECTIVITY.md)**
+- **[Phase 3 Command Center](docs/phases/PHASE_3_COMMAND_CENTER.md)**
 
 ## Product loop
 
 ![PayPulse agent loop](docs/assets/paypulse-agent-loop.svg)
 
-## Next step
+## Verification
 
-Phase 2 must be started only on explicit instruction. Its first task is to bootstrap the application foundation with failing-closed Sandbox configuration, database tenancy, deterministic demo fixtures, and tested Payment DNA domain logic.
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+The credential-backed Sandbox connectivity test runs only when the local developer environment has been securely configured; it never requires credentials in Git, the UI, or chat.

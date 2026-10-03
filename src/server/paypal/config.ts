@@ -15,6 +15,8 @@ const rawPayPalEnvironmentSchema = z.object({
   PAYPAL_ENVIRONMENT: z.literal("sandbox"),
 });
 
+export type EnvironmentVariables = Readonly<Record<string, string | undefined>>;
+
 export interface PayPalSandboxConfig {
   readonly clientId: string;
   readonly clientSecret: string;
@@ -33,7 +35,7 @@ export class PayPalConfigurationError extends Error {
  * override could accidentally permit a live PayPal endpoint.
  */
 export function getPayPalSandboxConfig(
-  environment: NodeJS.ProcessEnv = processEnv,
+  environment: EnvironmentVariables = processEnv,
 ): PayPalSandboxConfig {
   const result = rawPayPalEnvironmentSchema.safeParse({
     PAYPAL_CLIENT_ID: environment.PAYPAL_CLIENT_ID,

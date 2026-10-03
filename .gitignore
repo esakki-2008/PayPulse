@@ -4,6 +4,7 @@ dist/
 build/
 coverage/
 .next/
+*.tsbuildinfo
 out/
 
 # Local environment files and PayPal credentials
