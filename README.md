@@ -32,10 +32,7 @@ PayPulse is designed for **PayPal Sandbox only** during development and demonstr
 
 ## Product loop
 
-```text
-PayPal Sandbox → Observe → Understand → Payment DNA → Detect → Predict
-→ Recommend → Merchant approval → Sandbox execution → Outcome → Learn
-```
+![PayPulse agent loop](docs/assets/paypulse-agent-loop.svg)
 
 ## Next step
 

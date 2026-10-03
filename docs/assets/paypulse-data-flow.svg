@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1660 860" role="img" aria-labelledby="title desc">
+<title id="title">PayPulse ingestion and intelligence flow</title>
+<desc id="desc">PayPulse Phase 1 architecture diagram.</desc>
+<style>
+  .title { font: 700 25px Arial, Helvetica, sans-serif; fill: #14213d; }
+  .subtitle { font: 400 14px Arial, Helvetica, sans-serif; fill: #52607a; }
+  .label { font: 700 16px Arial, Helvetica, sans-serif; fill: #14213d; }
+  .small { font: 400 13px Arial, Helvetica, sans-serif; fill: #34415c; }
+  .tiny { font: 400 11px Arial, Helvetica, sans-serif; fill: #52607a; }
+  .node { fill: #ffffff; stroke: #b9c5d8; stroke-width: 2; }
+  .source { fill: #e6f4ff; stroke: #3b82b6; stroke-width: 2; }
+  .data { fill: #edf9f1; stroke: #2d8a57; stroke-width: 2; }
+  .intelligence { fill: #f3edff; stroke: #7956bf; stroke-width: 2; }
+  .action { fill: #fff5df; stroke: #ba7b13; stroke-width: 2; }
+  .control { fill: #ffecef; stroke: #c9576b; stroke-width: 2; }
+  .line { fill: none; stroke: #65758d; stroke-width: 2; marker-end: url(#arrow); }
+  .line-soft { fill: none; stroke: #8797af; stroke-width: 1.6; marker-end: url(#arrow); }
+  .line-loop { fill: none; stroke: #7956bf; stroke-width: 2; stroke-dasharray: 7 5; marker-end: url(#arrowPurple); }
+  .lane { fill: #f8fafc; stroke: #d6deea; stroke-width: 1.5; }
+  .participant { fill: #ffffff; stroke: #73839b; stroke-width: 1.5; }
+  .life { stroke: #9aa8ba; stroke-width: 1.5; stroke-dasharray: 5 5; }
+  .message { fill: none; stroke: #52657f; stroke-width: 1.7; marker-end: url(#arrow); }
+  .message-return { fill: none; stroke: #52657f; stroke-width: 1.5; stroke-dasharray: 5 4; marker-end: url(#arrow); }
+  .state { fill: #ffffff; stroke: #65758d; stroke-width: 2; }
+  .terminal { fill: #edf9f1; stroke: #2d8a57; stroke-width: 2; }
+  .warn { fill: #fff5df; stroke: #ba7b13; stroke-width: 2; }
+  .reject { fill: #ffecef; stroke: #c9576b; stroke-width: 2; }
+</style>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#65758d"/></marker>
+  <marker id="arrowPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7956bf"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff" rx="18"/>
+
+<text x="70" y="56" class="title">Ingestion and intelligence flow</text>
+<text x="70" y="82" class="subtitle">Verified transaction facts become a traceable recommendation. The AI adapter only receives a minimal fact packet.</text>
+<g>
+  <rect x="70" y="120" width="145" height="54" rx="11" class="participant"/><text x="142" y="152" text-anchor="middle" class="small">PayPal Sandbox</text>
+  <rect x="270" y="120" width="160" height="54" rx="11" class="participant"/><text x="350" y="145" text-anchor="middle" class="small">Webhook / Sync</text><text x="350" y="161" text-anchor="middle" class="small">Adapter</text>
+  <rect x="485" y="120" width="150" height="54" rx="11" class="participant"/><text x="560" y="152" text-anchor="middle" class="small">Normalized Ledger</text>
+  <rect x="690" y="120" width="140" height="54" rx="11" class="participant"/><text x="760" y="152" text-anchor="middle" class="small">DNA Engine</text>
+  <rect x="885" y="120" width="150" height="54" rx="11" class="participant"/><text x="960" y="145" text-anchor="middle" class="small">Signal + Prediction</text><text x="960" y="161" text-anchor="middle" class="small">Engine</text>
+  <rect x="1090" y="120" width="135" height="54" rx="11" class="participant"/><text x="1157" y="152" text-anchor="middle" class="small">AI Adapter</text>
+  <rect x="1280" y="120" width="140" height="54" rx="11" class="participant"/><text x="1350" y="152" text-anchor="middle" class="small">Action Engine</text>
+  <rect x="1475" y="120" width="115" height="54" rx="11" class="participant"/><text x="1532" y="152" text-anchor="middle" class="small">Merchant</text>
+  <path d="M142 174 V780 M350 174 V780 M560 174 V780 M760 174 V780 M960 174 V780 M1157 174 V780 M1350 174 V780 M1532 174 V780" class="life"/>
+  <path d="M142 230 H350" class="message"/><text x="246" y="219" text-anchor="middle" class="small">event or paged response</text>
+  <path d="M350 300 H560" class="message"/><text x="455" y="289" text-anchor="middle" class="small">verify, validate, deduplicate</text>
+  <path d="M560 370 H760" class="message"/><text x="660" y="359" text-anchor="middle" class="small">affected customer facts</text>
+  <path d="M760 440 H960" class="message"/><text x="860" y="429" text-anchor="middle" class="small">features + baseline deviations</text>
+  <path d="M960 510 H1157" class="message"/><text x="1058" y="499" text-anchor="middle" class="small">minimal grounded fact packet</text>
+  <path d="M1157 580 H1350" class="message"/><text x="1253" y="569" text-anchor="middle" class="small">validated explanation + draft</text>
+  <path d="M1350 650 H1532" class="message"/><text x="1441" y="639" text-anchor="middle" class="small">prioritized action plan</text>
+  <rect x="940" y="700" width="540" height="55" rx="12" class="lane"/><text x="1210" y="733" text-anchor="middle" class="small">Action policy calculates impact and only permits allowlisted, reviewable action templates.</text>
+</g>
+
+</svg>

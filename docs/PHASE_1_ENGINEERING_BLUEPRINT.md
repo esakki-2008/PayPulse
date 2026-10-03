@@ -72,10 +72,7 @@ Instead of asking a merchant to sift through payments and decide what matters, P
 
 The key innovation is a closed, accountable loop:
 
-```text
-PayPal → Observe → Understand → Payment DNA → Detect → Predict
-       → Recommend → Merchant approval → Sandbox execution → Outcome → Learn
-```
+![PayPulse agent loop](assets/paypulse-agent-loop.svg)
 
 Success is not “a merchant can view charts.” Success is that a merchant can understand and approve an economically meaningful next action in under a minute, with the evidence required to trust it.
 
@@ -219,42 +216,11 @@ The PayPal adapter should use server-side `fetch` behind a typed client. This mi
 
 ## Logical architecture
 
-```mermaid
-flowchart TD
-    PP[PayPal Sandbox\nOrders, captures, transaction search, webhooks] --> TL[Transaction Layer\nverify, ingest, normalize]
-    TL --> DB[(PostgreSQL\nledger + profiles + audit)]
-    DB --> PI[Payment Intelligence Layer\nmetrics and comparisons]
-    DB --> DNA[Payment DNA Engine\nbaselines and deviations]
-    PI --> DET[Signal / anomaly detector]
-    DNA --> DET
-    DET --> PRED[Prediction Engine\ntransparent scoring]
-    PRED --> AI[AI Intelligence Adapter\ngrounded explanation only]
-    AI --> ACT[Action Engine\npolicy, grouping, impact]
-    ACT --> UI[Merchant Command Center]
-    UI --> APPR[Human Approval Gate]
-    APPR --> EXEC[Execution Orchestrator]
-    EXEC --> PP
-    EXEC --> DB
-    DB --> OUT[Outcome & Memory Processor]
-    OUT --> DNA
-```
+![PayPulse system architecture](assets/paypulse-architecture.svg)
 
 ## Deployment boundaries
 
-```text
-Browser
-  └─ Next.js UI (no provider credentials, no PayPal access token)
-       └─ Authenticated same-origin API routes
-            ├─ Domain services + PostgreSQL
-            ├─ Gemini adapter (server-only API key)
-            └─ PayPal Sandbox adapter (server-only credentials, execution-only)
-
-External inbound traffic
-  └─ PayPal webhook route (signature verified before persistence)
-
-Scheduled traffic
-  └─ Vercel Cron → protected sync/recompute route → outbox jobs
-```
+![PayPulse deployment boundaries](assets/paypulse-deployment-boundaries.svg)
 
 # 7. Component architecture
 
@@ -278,55 +244,11 @@ The app uses a **functional core, imperative shell** pattern: scoring functions 
 
 ## A. Ingestion and intelligence flow
 
-```mermaid
-sequenceDiagram
-    participant P as PayPal Sandbox
-    participant W as Webhook/Sync Adapter
-    participant L as Normalized Ledger
-    participant D as DNA Engine
-    participant S as Signal + Prediction Engine
-    participant A as AI Adapter
-    participant R as Action Engine
-    participant M as Merchant
-
-    P->>W: Transaction event or paged transaction response
-    W->>W: Verify / validate / deduplicate
-    W->>L: Upsert immutable payment event and canonical payment
-    L->>D: Recompute affected customer DNA snapshot
-    D->>S: Features and baseline deviations
-    S->>S: Detect, score, and deduplicate signals
-    S->>A: Minimal fact packet, no execution capability
-    A->>R: Schema-validated explanation + draft wording
-    R->>R: Apply policy and calculate proposed impact
-    R->>M: Prioritized action plan with WHY/WHAT/IMPACT/APPROVAL
-```
+![PayPulse ingestion and intelligence data flow](assets/paypulse-data-flow.svg)
 
 ## B. Approval and execution flow
 
-```mermaid
-sequenceDiagram
-    participant M as Merchant
-    participant U as UI/API
-    participant G as Approval Gate
-    participant E as Execution Orchestrator
-    participant P as PayPal Sandbox
-    participant O as Outcome Store
-
-    M->>U: Approve exact recommendation version
-    U->>G: authenticated actor + selected items + expected version
-    G->>G: Check ownership, state, policy, stale evidence, role
-    G->>O: Append immutable approval audit event
-    G->>E: Enqueue idempotent execution intent
-    E->>E: Revalidate sandbox guard and approval hash
-    alt PayPal-backed recovery checkout
-      E->>P: POST /v2/checkout/orders (Sandbox, PayPal-Request-Id)
-      P-->>E: Sandbox order ID and approve link
-    else Internal non-financial action
-      E->>E: Create tracked draft/task/review case
-    end
-    E->>O: Persist execution result and outcome event
-    O-->>M: Completed / needs attention status; DNA refresh scheduled
-```
+![PayPulse approval and execution data flow](assets/paypulse-approval-execution-flow.svg)
 
 ## C. Data ownership and freshness
 
@@ -341,25 +263,7 @@ Use PostgreSQL with UUID primary keys, UTC `timestamptz`, `numeric(18,2)` (or mi
 
 ## Entity map
 
-```mermaid
-erDiagram
-    MERCHANTS ||--o{ PAYPAL_ACCOUNTS : connects
-    MERCHANTS ||--o{ CUSTOMERS : owns
-    MERCHANTS ||--o{ PAYMENTS : receives
-    CUSTOMERS ||--o{ PAYMENTS : makes
-    PAYMENTS ||--o{ PAYMENT_EVENTS : emits
-    CUSTOMERS ||--o{ PAYMENT_DNA_SNAPSHOTS : has
-    PAYMENT_DNA_SNAPSHOTS ||--o{ DNA_SIGNALS : explains
-    MERCHANTS ||--o{ INSIGHT_RUNS : produces
-    INSIGHT_RUNS ||--o{ INSIGHTS : contains
-    INSIGHTS ||--o{ PREDICTIONS : informs
-    INSIGHTS ||--o{ ACTION_RECOMMENDATIONS : motivates
-    ACTION_PLANS ||--o{ ACTION_RECOMMENDATIONS : groups
-    ACTION_RECOMMENDATIONS ||--o{ APPROVAL_DECISIONS : receives
-    ACTION_RECOMMENDATIONS ||--o{ ACTION_EXECUTIONS : runs
-    ACTION_EXECUTIONS ||--o{ OUTCOMES : records
-    MERCHANTS ||--o{ AUDIT_LOGS : audits
-```
+![PayPulse Payment DNA and intelligence entity map](assets/paypulse-payment-dna.svg)
 
 ## Tables
 
@@ -560,23 +464,7 @@ The first four actions visibly demonstrate agentic reasoning and human operation
 
 ## Action state machine
 
-```mermaid
-stateDiagram-v2
-    [*] --> proposed
-    proposed --> in_review
-    in_review --> approved: merchant approves exact version
-    in_review --> rejected: merchant rejects
-    proposed --> expired: stale evidence / expiry
-    approved --> queued
-    queued --> executing
-    executing --> completed
-    executing --> needs_attention
-    executing --> failed
-    completed --> outcome_observed
-    needs_attention --> in_review: merchant resolves/retries with new approval
-    rejected --> [*]
-    expired --> [*]
-```
+![PayPulse action recommendation state machine](assets/paypulse-action-state-machine.svg)
 
 ### Approval contract
 

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1840 1110" role="img" aria-labelledby="title desc">
+<title id="title">PayPulse Payment DNA and intelligence entity map</title>
+<desc id="desc">PayPulse Phase 1 architecture diagram.</desc>
+<style>
+  .title { font: 700 25px Arial, Helvetica, sans-serif; fill: #14213d; }
+  .subtitle { font: 400 14px Arial, Helvetica, sans-serif; fill: #52607a; }
+  .label { font: 700 16px Arial, Helvetica, sans-serif; fill: #14213d; }
+  .small { font: 400 13px Arial, Helvetica, sans-serif; fill: #34415c; }
+  .tiny { font: 400 11px Arial, Helvetica, sans-serif; fill: #52607a; }
+  .node { fill: #ffffff; stroke: #b9c5d8; stroke-width: 2; }
+  .source { fill: #e6f4ff; stroke: #3b82b6; stroke-width: 2; }
+  .data { fill: #edf9f1; stroke: #2d8a57; stroke-width: 2; }
+  .intelligence { fill: #f3edff; stroke: #7956bf; stroke-width: 2; }
+  .action { fill: #fff5df; stroke: #ba7b13; stroke-width: 2; }
+  .control { fill: #ffecef; stroke: #c9576b; stroke-width: 2; }
+  .line { fill: none; stroke: #65758d; stroke-width: 2; marker-end: url(#arrow); }
+  .line-soft { fill: none; stroke: #8797af; stroke-width: 1.6; marker-end: url(#arrow); }
+  .line-loop { fill: none; stroke: #7956bf; stroke-width: 2; stroke-dasharray: 7 5; marker-end: url(#arrowPurple); }
+  .state { fill: #ffffff; stroke: #65758d; stroke-width: 2; }
+  .terminal { fill: #edf9f1; stroke: #2d8a57; stroke-width: 2; }
+  .warn { fill: #fff5df; stroke: #ba7b13; stroke-width: 2; }
+  .reject { fill: #ffecef; stroke: #c9576b; stroke-width: 2; }
+</style>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#65758d"/></marker>
+  <marker id="arrowPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7956bf"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff" rx="18"/>
+
+<text x="70" y="56" class="title">Payment DNA and intelligence entity map</text>
+<text x="70" y="82" class="subtitle">Tenant payment records produce versioned DNA, insights, predictions, approvals, executions, and recorded outcomes.</text>
+<!-- Primary entity relationships. Lines are drawn before cards for readability. -->
+<path d="M280 205 H370" class="line-soft"/><text x="325" y="193" text-anchor="middle" class="tiny">connects</text>
+<path d="M280 205 V350 H370" class="line-soft"/><text x="310" y="286" class="tiny">owns</text>
+<path d="M280 205 V450 H680" class="line-soft"/><text x="470" y="438" class="tiny">receives</text>
+<path d="M280 205 V205 H680" class="line-soft"/><text x="475" y="193" text-anchor="middle" class="tiny">produces</text>
+<path d="M280 205 V870 H370" class="line-soft"/><text x="302" y="690" class="tiny">audits</text>
+<path d="M590 400 H680" class="line-soft"/><text x="635" y="388" text-anchor="middle" class="tiny">makes</text>
+<path d="M900 450 H1000" class="line-soft"/><text x="950" y="438" text-anchor="middle" class="tiny">emits</text>
+<path d="M480 500 V640" class="line-soft"/><text x="502" y="578" class="tiny">has</text>
+<path d="M590 690 H700" class="line-soft"/><text x="645" y="678" text-anchor="middle" class="tiny">explains</text>
+<path d="M900 205 H1000" class="line-soft"/><text x="950" y="193" text-anchor="middle" class="tiny">contains</text>
+<path d="M1220 205 H1320" class="line-soft"/><text x="1270" y="193" text-anchor="middle" class="tiny">informs</text>
+<path d="M1110 255 V590 H1430 V640" class="line-soft"/><text x="1133" y="430" class="tiny">motivates</text>
+<path d="M1220 690 H1320" class="line-soft"/><text x="1270" y="678" text-anchor="middle" class="tiny">groups</text>
+<path d="M1430 740 V820 H1160" class="line-soft"/><text x="1250" y="808" class="tiny">receives</text>
+<path d="M1540 740 V820 H1480" class="line-soft"/><text x="1510" y="808" class="tiny">runs</text>
+<path d="M1590 870 H1640" class="line-soft"/><text x="1615" y="858" text-anchor="middle" class="tiny">records</text>
+<!-- Entity cards -->
+<rect x="60" y="155" width="220" height="100" rx="14" class="data"/><text x="170" y="194" text-anchor="middle" class="label">MERCHANTS</text><text x="170" y="221" text-anchor="middle" class="small">tenant boundary</text>
+<rect x="370" y="155" width="220" height="100" rx="14" class="source"/><text x="480" y="194" text-anchor="middle" class="label">PAYPAL_ACCOUNTS</text><text x="480" y="221" text-anchor="middle" class="small">Sandbox connection</text>
+<rect x="680" y="155" width="220" height="100" rx="14" class="intelligence"/><text x="790" y="194" text-anchor="middle" class="label">INSIGHT_RUNS</text><text x="790" y="221" text-anchor="middle" class="small">reproducible process</text>
+<rect x="1000" y="155" width="220" height="100" rx="14" class="intelligence"/><text x="1110" y="194" text-anchor="middle" class="label">INSIGHTS</text><text x="1110" y="221" text-anchor="middle" class="small">observations + evidence</text>
+<rect x="1320" y="155" width="220" height="100" rx="14" class="intelligence"/><text x="1430" y="194" text-anchor="middle" class="label">PREDICTIONS</text><text x="1430" y="221" text-anchor="middle" class="small">score + confidence</text>
+<rect x="370" y="400" width="220" height="100" rx="14" class="data"/><text x="480" y="439" text-anchor="middle" class="label">CUSTOMERS</text><text x="480" y="466" text-anchor="middle" class="small">merchant relationship</text>
+<rect x="680" y="400" width="220" height="100" rx="14" class="data"/><text x="790" y="439" text-anchor="middle" class="label">PAYMENTS</text><text x="790" y="466" text-anchor="middle" class="small">canonical transaction</text>
+<rect x="1000" y="400" width="220" height="100" rx="14" class="data"/><text x="1110" y="439" text-anchor="middle" class="label">PAYMENT_EVENTS</text><text x="1110" y="466" text-anchor="middle" class="small">immutable event ledger</text>
+<rect x="370" y="640" width="220" height="100" rx="14" class="intelligence"/><text x="480" y="679" text-anchor="middle" class="label" font-size="14">PAYMENT_DNA_SNAPSHOTS</text><text x="480" y="706" text-anchor="middle" class="small">versioned behavior profile</text>
+<rect x="700" y="640" width="220" height="100" rx="14" class="intelligence"/><text x="810" y="679" text-anchor="middle" class="label">DNA_SIGNALS</text><text x="810" y="706" text-anchor="middle" class="small">baseline deviations</text>
+<rect x="1000" y="640" width="220" height="100" rx="14" class="action"/><text x="1110" y="679" text-anchor="middle" class="label">ACTION_PLANS</text><text x="1110" y="706" text-anchor="middle" class="small">reviewable batch</text>
+<rect x="1320" y="640" width="220" height="100" rx="14" class="action"/><text x="1430" y="679" text-anchor="middle" class="label" font-size="14">ACTION_RECOMMENDATIONS</text><text x="1430" y="706" text-anchor="middle" class="small">one proposed action</text>
+<rect x="370" y="820" width="220" height="100" rx="14" class="data"/><text x="480" y="859" text-anchor="middle" class="label">AUDIT_LOGS</text><text x="480" y="886" text-anchor="middle" class="small">append-only record</text>
+<rect x="1050" y="820" width="220" height="100" rx="14" class="control"/><text x="1160" y="859" text-anchor="middle" class="label" font-size="14">APPROVAL_DECISIONS</text><text x="1160" y="886" text-anchor="middle" class="small">actor + version + hash</text>
+<rect x="1370" y="820" width="220" height="100" rx="14" class="action"/><text x="1480" y="859" text-anchor="middle" class="label">ACTION_EXECUTIONS</text><text x="1480" y="886" text-anchor="middle" class="small">idempotent run</text>
+<rect x="1640" y="820" width="170" height="100" rx="14" class="data"/><text x="1725" y="859" text-anchor="middle" class="label">OUTCOMES</text><text x="1725" y="886" text-anchor="middle" class="small">observed result</text>
+<text x="70" y="1020" class="tiny">This diagram mirrors the Phase 1 entity map. The detailed table definition in the blueprint remains the source of truth for fields, constraints, and indexes.</text>
+
+</svg>
