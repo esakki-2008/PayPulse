@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 const execFile = promisify(execFileCallback);
 const require = createRequire(import.meta.url);
 const tsxLoader = pathToFileURL(require.resolve("tsx")).href;
+const nextEnvironmentUrl = pathToFileURL(require.resolve("@next/env")).href;
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const temporaryDirectories: string[] = [];
 
@@ -19,7 +20,7 @@ afterEach(async () => {
 });
 
 describe("PayPal Sandbox standalone CLI environment", () => {
-  it("loads a local .env.local before configuration without printing its values", async () => {
+  it("loads a local .env.local from a Vitest test process without printing its values", async () => {
     const projectDirectory = await mkdtemp(join(tmpdir(), "paypulse-cli-env-"));
     temporaryDirectories.push(projectDirectory);
     const syntheticClientId = "cli-unit-client-id";
@@ -33,18 +34,22 @@ describe("PayPal Sandbox standalone CLI environment", () => {
     const moduleUrl = pathToFileURL(join(repositoryRoot, "src/server/paypal/cli-environment.ts")).href;
     const configUrl = pathToFileURL(join(repositoryRoot, "src/server/paypal/config.ts")).href;
     const probe = `
+      import nextEnvironment from ${JSON.stringify(nextEnvironmentUrl)};
       import { loadPayPalSandboxCliEnvironment } from ${JSON.stringify(moduleUrl)};
       import { getPayPalSandboxConfig } from ${JSON.stringify(configUrl)};
-      loadPayPalSandboxCliEnvironment(process.cwd());
+      // Simulate a test runtime that initialized @next/env before this suite.
+      nextEnvironment.loadEnvConfig(process.cwd(), false, { info() {}, error() {} }, true);
+      loadPayPalSandboxCliEnvironment(process.cwd(), { includeLocalEnvironmentInTest: true });
       const config = getPayPalSandboxConfig();
       process.stdout.write(JSON.stringify({
         endpoint: config.apiBaseUrl,
         environment: config.environment,
+        nodeEnvironment: process.env.NODE_ENV,
         clientConfigured: Boolean(config.clientId),
         secretConfigured: Boolean(config.clientSecret),
       }));
     `;
-    const environment: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "development" };
+    const environment: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "test" };
     delete environment.PAYPAL_CLIENT_ID;
     delete environment.PAYPAL_CLIENT_SECRET;
     delete environment.PAYPAL_ENVIRONMENT;
@@ -59,6 +64,7 @@ describe("PayPal Sandbox standalone CLI environment", () => {
     expect(JSON.parse(stdout)).toEqual({
       endpoint: "https://api-m.sandbox.paypal.com",
       environment: "sandbox",
+      nodeEnvironment: "test",
       clientConfigured: true,
       secretConfigured: true,
     });

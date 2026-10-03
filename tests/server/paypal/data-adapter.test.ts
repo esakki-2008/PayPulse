@@ -27,6 +27,7 @@ describe("PayPalSandboxDataAdapter", () => {
   it("normalizes, upserts, and preserves PayPal Sandbox provenance", async () => {
     const repository = new SandboxMemoryRepository();
     const listTransactions = vi.fn<(query: PayPalTransactionQuery) => Promise<PayPalTransactionSearchResult>>(async () => ({
+      httpStatus: 200,
       transactionDetails: [transactionDetail],
       page: 1,
       totalPages: 1,
@@ -96,6 +97,7 @@ describe("PayPalSandboxDataAdapter", () => {
       repository,
       transactionService: {
         listTransactions: async () => ({
+          httpStatus: 200,
           transactionDetails: [transactionDetail],
           page: 1,
           totalPages: 1,
@@ -116,6 +118,7 @@ describe("PayPalSandboxDataAdapter", () => {
       now: () => new Date("2026-10-03T10:00:00.000Z"),
       transactionService: {
         listTransactions: async () => ({
+          httpStatus: 200,
           transactionDetails: [],
           page: 1,
           totalPages: 0,

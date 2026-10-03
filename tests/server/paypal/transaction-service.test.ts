@@ -70,6 +70,12 @@ describe("PayPalTransactionService", () => {
     expect(fetchImplementation.mock.calls[0]?.[0]).toContain(
       "https://api-m.sandbox.paypal.com/v1/reporting/transactions?",
     );
+    expect(fetchImplementation.mock.calls[0]?.[1]).toMatchObject({
+      method: "GET",
+      cache: "no-store",
+    });
+    expect(fetchImplementation.mock.calls[0]?.[1]?.body).toBeUndefined();
+    expect(result.httpStatus).toBe(200);
     expect(result.transactionDetails).toHaveLength(2);
     expect(result.totalPages).toBe(2);
   });

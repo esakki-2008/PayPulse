@@ -161,6 +161,6 @@ npm run test:paypal-transaction-search # credential-gated and skipped without Sa
 npm run build
 ```
 
-The test suite covers normalization/provenance, payer absence, status mapping, pagination bounds, malformed payloads, source-isolated empty data, memory upserts, and multi-currency non-aggregation. `tests/integration/paypal-sandbox-transaction-search.test.ts` is credential-gated: it skips unless Sandbox OAuth configuration is available, then performs the real read-only Transaction Search request without logging secrets or raw provider data.
+The test suite covers normalization/provenance, payer absence, status mapping, pagination bounds, malformed payloads, source-isolated empty data, memory upserts, and multi-currency non-aggregation. `tests/integration/paypal-sandbox-transaction-search.test.ts` is credential-gated and explicitly loads the untracked local `.env.local` using the same silent Next.js environment loader as the standalone verifier. When valid Sandbox OAuth configuration is available, it performs the real read-only Transaction Search request without logging secrets, tokens, headers, or raw provider data. It remains skipped when credentials are unavailable, treats malformed populated configuration as a safe pre-request failure, and accepts an empty Sandbox result as an honest empty dataset.
 
 For the prior authentication-only check, see [PayPal Sandbox connectivity](../PAYPAL_SANDBOX_CONNECTIVITY.md).

@@ -71,13 +71,13 @@ The report never contains the Client Secret, `Authorization` header, raw provide
 
 ## Automated integration test
 
-With the same shell environment, run:
+With a valid local `.env.local`, run:
 
 ```bash
 npm run test:paypal-connectivity
 ```
 
-This test executes the real Sandbox OAuth call only when both `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` are present. Otherwise it is skipped; it does not fabricate success. The normal `npm test` suite also includes this conditional test.
+The credential-gated Vitest suite explicitly invokes the same silent Next.js environment loader as the standalone verifier. This matters because Vitest normally uses `NODE_ENV=test`, for which Next intentionally ignores `.env.local`. When the local Sandbox configuration is valid, the test executes the real server-side OAuth call; when credentials are unavailable, it is skipped; and when populated configuration is malformed, it reports a safe configuration assertion without making an OAuth request. It does not fabricate success. The normal `npm test` suite also includes this conditional test.
 
 ## Security precautions
 

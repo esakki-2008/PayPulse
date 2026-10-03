@@ -59,6 +59,8 @@ const transactionSearchResponseSchema = z.object({
 export type PayPalTransactionDetail = z.infer<typeof transactionDetailSchema>;
 
 export interface PayPalTransactionSearchResult {
+  /** Safe first-page status; no provider headers or body are retained. */
+  readonly httpStatus: number;
   readonly transactionDetails: readonly PayPalTransactionDetail[];
   readonly page: number;
   readonly totalPages: number;
@@ -111,6 +113,7 @@ export class PayPalTransactionService {
     }
 
     return {
+      httpStatus: firstPage.httpStatus,
       transactionDetails: details,
       page: firstPage.page,
       totalPages,
@@ -178,6 +181,7 @@ export class PayPalTransactionService {
     }
 
     return {
+      httpStatus: response.status,
       transactionDetails: parsed.data.transaction_details,
       page: parsed.data.page ?? page,
       totalPages: parsed.data.total_pages ?? 0,
