@@ -33,6 +33,10 @@ describe("PayPalOAuthTokenService", () => {
 
     await expect(service.getAccessToken()).resolves.toBe("unit-test-access-token");
     await expect(service.getAccessToken()).resolves.toBe("unit-test-access-token");
+    await expect(service.getAccessTokenMetadata()).resolves.toEqual({
+      expiresAt: "1970-01-01T01:00:00.000Z",
+      httpStatus: 200,
+    });
 
     expect(fetchImplementation).toHaveBeenCalledTimes(1);
     expect(fetchImplementation).toHaveBeenCalledWith(
@@ -60,10 +64,11 @@ describe("PayPalOAuthTokenService", () => {
       fetchImplementation,
     });
 
-    await expect(service.getAccessToken()).rejects.toEqual(
+    await expect(service.getAccessToken()).rejects.toMatchObject(
       new PayPalTokenRequestError(
         "PayPal Sandbox access-token request failed (HTTP 401).",
         401,
+        "authentication",
       ),
     );
   });

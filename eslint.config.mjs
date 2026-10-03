@@ -8,7 +8,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.ts", "tests/**/*.ts"],
+    files: ["scripts/**/*.ts", "src/**/*.ts", "tests/**/*.ts"],
     rules: {
       "no-console": "error",
     },

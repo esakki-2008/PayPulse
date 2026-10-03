@@ -36,7 +36,20 @@ interface PayPalTokenPayload {
 interface CachedAccessToken {
   readonly value: string;
   readonly expiresAtMs: number;
+  readonly httpStatus: number;
 }
+
+/** Safe token metadata. It intentionally never includes the access token. */
+export interface PayPalAccessTokenMetadata {
+  readonly expiresAt: string;
+  readonly httpStatus: number;
+}
+
+export type PayPalTokenErrorCategory =
+  | "authentication"
+  | "network"
+  | "provider_response"
+  | "runtime";
 
 export interface PayPalOAuthTokenServiceOptions {
   readonly configProvider?: () => PayPalSandboxConfig;
@@ -50,6 +63,7 @@ export class PayPalTokenRequestError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    readonly category: PayPalTokenErrorCategory = "provider_response",
   ) {
     super(message);
   }
@@ -95,6 +109,28 @@ export class PayPalOAuthTokenService {
     }
   }
 
+  /**
+   * Performs the same token retrieval path as getAccessToken but returns only
+   * safe metadata that a connectivity check may report.
+   */
+  async getAccessTokenMetadata(): Promise<PayPalAccessTokenMetadata> {
+    await this.getAccessToken();
+
+    const cachedToken = this.cachedAccessToken;
+    if (!cachedToken) {
+      throw new PayPalTokenRequestError(
+        "PayPal Sandbox access-token metadata was unavailable after retrieval.",
+        undefined,
+        "runtime",
+      );
+    }
+
+    return {
+      expiresAt: new Date(cachedToken.expiresAtMs).toISOString(),
+      httpStatus: cachedToken.httpStatus,
+    };
+  }
+
   private getFreshCachedToken(): CachedAccessToken | undefined {
     const cachedToken = this.cachedAccessToken;
 
@@ -120,6 +156,7 @@ export class PayPalOAuthTokenService {
     this.cachedAccessToken = {
       value: payload.access_token,
       expiresAtMs,
+      httpStatus: response.status,
     };
 
     return payload.access_token;
@@ -143,6 +180,8 @@ async function defaultTokenFetch(
   if (typeof globalThis.fetch !== "function") {
     throw new PayPalTokenRequestError(
       "This server runtime does not provide fetch for the PayPal Sandbox token request.",
+      undefined,
+      "runtime",
     );
   }
 
@@ -178,6 +217,8 @@ async function requestPayPalToken(
     // text because those may contain sensitive authentication context.
     throw new PayPalTokenRequestError(
       "Unable to reach PayPal Sandbox for an access token.",
+      undefined,
+      "network",
     );
   }
 
@@ -185,6 +226,9 @@ async function requestPayPalToken(
     throw new PayPalTokenRequestError(
       `PayPal Sandbox access-token request failed (HTTP ${response.status}).`,
       response.status,
+      response.status === 401 || response.status === 403
+        ? "authentication"
+        : "provider_response",
     );
   }
 
