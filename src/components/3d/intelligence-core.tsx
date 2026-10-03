@@ -23,10 +23,12 @@ function supportsWebGl(): boolean {
 export function IntelligenceCore({
   state,
   customers,
+  customerStates,
   onCustomerSelect,
 }: {
   readonly state: CoreState;
   readonly customers: readonly Customer[];
+  readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>;
   readonly onCustomerSelect?: (customerId: string) => void;
 }) {
   const [webglAvailable, setWebglAvailable] = useState<boolean | null>(null);
@@ -54,6 +56,7 @@ export function IntelligenceCore({
     <IntelligenceScene
       state={state}
       customers={customers}
+      customerStates={customerStates}
       onCustomerSelect={onCustomerSelect}
     />
   );

@@ -14,6 +14,8 @@ import type { DashboardSnapshot } from "@/types/domain";
 assertServerRuntime("PayPal Sandbox data adapter");
 
 const SANDBOX_CACHE_TTL_MS = 60_000;
+const PAYMENT_INTELLIGENCE_HISTORY_DAYS = 180;
+const TRANSACTION_SEARCH_RANGE_DAYS = 31;
 const DEFAULT_MERCHANT_ID = "paypal-sandbox-default";
 
 export type SandboxPersistence = "memory_cache" | "postgres";
@@ -53,25 +55,29 @@ export class PayPalSandboxDataAdapter {
 
   async syncRecentTransactions(): Promise<PayPalSandboxDataSnapshot> {
     const endDate = this.now();
-    const startDate = new Date(endDate.getTime() - 31 * 24 * 60 * 60 * 1_000);
-    const result = await this.transactionService.listTransactions({
-      startDate,
-      endDate,
-      pageSize: 100,
-      maxPages: 3,
-    });
-    const transactions = normalizePayPalSandboxTransactions(result.transactionDetails);
-    const customers = normalizePayPalSandboxCustomers(
-      result.transactionDetails,
-      transactions,
-    );
+    const ranges = buildBoundedSearchRanges(endDate);
+    const results = [];
+    // Transaction Search accepts a 31-day maximum. Keep the broader Payment
+    // DNA lookback honest by issuing a small, sequential set of documented,
+    // non-overlapping range requests behind the shared 60-second cache.
+    for (const range of ranges) {
+      results.push(await this.transactionService.listTransactions({
+        startDate: range.startDate,
+        endDate: range.endDate,
+        pageSize: 100,
+        maxPages: 3,
+      }));
+    }
+    const details = results.flatMap((result) => result.transactionDetails);
+    const transactions = deduplicateTransactions(normalizePayPalSandboxTransactions(details));
+    const customers = normalizePayPalSandboxCustomers(details, transactions);
 
     await this.repository.upsertCustomers(customers);
     await this.repository.upsertTransactions(transactions);
 
-    // The snapshot is intentionally bounded to this provider response. The
-    // repository remains a durable normalized record store, but old persisted
-    // history is not presented as though it were in the current 31-day query.
+    // The snapshot is intentionally bounded to this 180-day provider lookback.
+    // The repository remains durable, but older persisted history is not
+    // presented as though it were in the current evidence window.
     const metrics = calculateDashboardMetrics(transactions, customers, endDate);
 
     return {
@@ -89,10 +95,28 @@ export class PayPalSandboxDataAdapter {
       },
       persistence: this.persistence,
       fetchedAt: endDate.toISOString(),
-      totalProviderItems: result.totalItems,
-      totalProviderPages: result.totalPages,
+      totalProviderItems: results.reduce((total, result) => total + result.totalItems, 0),
+      totalProviderPages: results.reduce((total, result) => total + result.totalPages, 0),
     };
   }
+}
+
+function buildBoundedSearchRanges(endDate: Date): readonly { readonly startDate: Date; readonly endDate: Date }[] {
+  const earliest = new Date(endDate.getTime() - PAYMENT_INTELLIGENCE_HISTORY_DAYS * 24 * 60 * 60 * 1_000);
+  const ranges: { startDate: Date; endDate: Date }[] = [];
+  let cursor = endDate;
+  while (cursor > earliest) {
+    const startDate = new Date(Math.max(earliest.getTime(), cursor.getTime() - TRANSACTION_SEARCH_RANGE_DAYS * 24 * 60 * 60 * 1_000));
+    ranges.push({ startDate, endDate: cursor });
+    // Avoid inclusive-boundary duplicates. The normalizer also de-duplicates
+    // reporting identities because the provider documents non-unique IDs.
+    cursor = new Date(startDate.getTime() - 1);
+  }
+  return ranges.reverse();
+}
+
+function deduplicateTransactions<T extends { readonly id: string }>(transactions: readonly T[]): readonly T[] {
+  return [...new Map(transactions.map((transaction) => [transaction.id, transaction])).values()];
 }
 
 interface CachedSandboxSnapshot {

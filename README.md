@@ -4,13 +4,13 @@
 
 PayPulse is an AI Payment Intelligence & Action Agent for the PayPal AI Hackathon. It turns merchant payment behavior into explainable **Payment DNA**, prioritizes meaningful change, and prepares human-approved next actions.
 
-## Current status — Phase 4 PayPal Sandbox data integration
+## Current status — Phase 5 Payment DNA + Intelligence Engine
 
-The primary experience remains the immersive 3D Command Center. When server-side Sandbox credentials and Transaction Search reporting access are configured, its default source is normalized, read-only **PayPal Sandbox** transaction data. Payment Universe and Customer Intelligence show only returned transaction/payer facts, including explicit `paypal_sandbox` provenance.
+The primary experience remains the immersive 3D Command Center. When server-side Sandbox credentials and Transaction Search reporting access are configured, its default source is normalized, read-only **PayPal Sandbox** transaction data with explicit `paypal_sandbox` provenance.
 
-A visible source selector distinguishes **PayPal Sandbox** from the retained **Demo Data** prototype. Demo data is never silently mixed with or substituted for Sandbox data: it requires an explicit selection. Sandbox access/configuration/provider failures display a safe unavailable state, and an empty reporting period stays empty.
+Phase 5 converts normalized completed transactions into deterministic Payment DNA, currency-separated revenue facts, explainable behavior signals, and transparent MAD-based unusual-payment-pattern detection. Sparse history is explicitly labeled **“Insufficient transaction history for behavioral analysis.”** Demo data remains a visible, explicit `?source=demo` mode and is never mixed with Sandbox data.
 
-Phase 4 uses only the documented read-only Transaction Search endpoint. It does not create orders, capture/refund/move money, invoke PayPal actions, produce Payment DNA, or generate AI financial decisions. Payment DNA is explicitly marked as **Preparing Payment DNA** for Sandbox records.
+Optional AI explanation is server-only, explicit, schema-validated, evidence-bounded, and cached; it is not called on page render. PayPulse never creates orders, captures/refunds/moves money, sends autonomous messages, or lets AI execute financial actions.
 
 ### Run the command center
 
@@ -36,6 +36,7 @@ PayPulse is designed for **PayPal Sandbox only** during development and demonstr
 - **[Phase 2 OAuth connectivity verification](docs/PAYPAL_SANDBOX_CONNECTIVITY.md)**
 - **[Phase 3 Command Center](docs/phases/PHASE_3_COMMAND_CENTER.md)**
 - **[Phase 4 PayPal Sandbox data integration](docs/phases/PHASE_4_PAYPAL_DATA_INTEGRATION.md)**
+- **[Phase 5 Payment DNA + Intelligence Engine](docs/phases/PHASE_5_PAYMENT_INTELLIGENCE.md)**
 
 ## Product loop
 

@@ -153,9 +153,11 @@ function PaymentStream() {
 
 function CustomerNodes({
   customers,
+  customerStates,
   onCustomerSelect,
 }: {
   readonly customers: readonly Customer[];
+  readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>;
   readonly onCustomerSelect?: (customerId: string) => void;
 }) {
   return (
@@ -168,7 +170,8 @@ function CustomerNodes({
           ((index % 3) - 1) * 0.82,
           Math.sin(angle) * radius,
         ];
-        const color = customer.risk === "high" ? "#fb7185" : customer.risk === "medium" ? "#fbbf24" : "#67e8f9";
+        const behavior = customerStates?.[customer.id];
+        const color = behavior === "declining" || behavior === "inactive" ? "#fbbf24" : behavior === "irregular" ? "#fb7185" : behavior === "insufficient_data" ? "#94a3b8" : behavior === "growing" ? "#34d399" : "#67e8f9";
 
         return (
           <mesh
@@ -191,10 +194,12 @@ function CustomerNodes({
 export default function IntelligenceScene({
   state,
   customers,
+  customerStates,
   onCustomerSelect,
 }: {
   readonly state: CoreState;
   readonly customers: readonly Customer[];
+  readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>;
   readonly onCustomerSelect?: (customerId: string) => void;
 }) {
   return (
@@ -213,7 +218,7 @@ export default function IntelligenceScene({
         <OrbitalRing radius={3.06} rotation={[0.25, 0.75, -0.5]} color="#67e8f9" speed={0.045} />
         <ParticleField />
         <PaymentStream />
-        <CustomerNodes customers={customers} onCustomerSelect={onCustomerSelect} />
+        <CustomerNodes customers={customers} customerStates={customerStates} onCustomerSelect={onCustomerSelect} />
         <OrbitControls enablePan={false} enableZoom={false} autoRotate autoRotateSpeed={0.42} />
       </Canvas>
       <div className="pointer-events-none absolute inset-x-5 top-5 flex items-start justify-between text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100/80">

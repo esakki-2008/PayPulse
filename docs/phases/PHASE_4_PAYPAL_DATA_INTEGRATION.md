@@ -37,7 +37,7 @@ It obtains its OAuth token through the existing shared `src/server/paypal/token-
 
 ### Capability limitations reflected in the product
 
-- Transaction Search requires RFC 3339 `start_date` and `end_date` values and documents a maximum **31-day** date range. Each synchronization requests at most the last 31 days.
+- Transaction Search requires RFC 3339 `start_date` and `end_date` values and documents a maximum **31-day** date range. Phase 5 composes a bounded set of non-overlapping 31-day requests to provide up to 180 days of actual evidence for Payment DNA; it never submits an oversized query.
 - Reporting data can be delayed (the PayPal documentation notes up to approximately three hours), so this is not a real-time ledger.
 - Reporting transaction IDs are not assumed to be globally unique. Normalized persistence uses a source-qualified reporting reference made from the PayPal transaction ID, event code, and initiation time.
 - Transaction Search availability and the `https://uri.paypal.com/services/reporting/search/read` permission are account/app dependent. A `403` is shown as an explicit unsupported-capability error, not as an empty or demo dataset.
@@ -73,7 +73,7 @@ The server-only PayPal boundary is under `src/server/paypal/`:
 - `order-service.ts` documents the intentionally unavailable order-detail boundary.
 - `provider-error.ts` carries safe categories without provider bodies or credentials.
 
-A process-local single-flight cache has a **60-second** TTL. This prevents a page render/API request burst from generating repeated reporting calls. There is no browser polling. The adapter fetches up to three pages of 100 records per sync; it never follows an unbounded page stream. Each displayed snapshot is built from that bounded current provider response, rather than treating older durable records as current-reporting-window data.
+A process-local single-flight cache has a **60-second** TTL. This prevents a page render/API request burst from generating repeated reporting calls. There is no browser polling. Each documented 31-day request fetches up to three pages of 100 records, and Phase 5 makes at most six sequential non-overlapping requests to cover its 180-day evidence horizon. It never follows an unbounded page stream. Each displayed snapshot is built from that bounded current provider response, rather than treating older durable records as current-reporting-window data.
 
 ## Provenance and source selection
 

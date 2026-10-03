@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SandboxMemoryRepository } from "../../../src/server/database/sandbox-memory-repository";
 import { PayPalSandboxDataAdapter } from "../../../src/server/paypal/data-adapter";
-import type { PayPalTransactionDetail } from "../../../src/server/paypal/transaction-service";
+import type {
+  PayPalTransactionDetail,
+  PayPalTransactionQuery,
+  PayPalTransactionSearchResult,
+} from "../../../src/server/paypal/transaction-service";
 
 const transactionDetail: PayPalTransactionDetail = {
   transaction_info: {
@@ -22,18 +26,17 @@ const transactionDetail: PayPalTransactionDetail = {
 describe("PayPalSandboxDataAdapter", () => {
   it("normalizes, upserts, and preserves PayPal Sandbox provenance", async () => {
     const repository = new SandboxMemoryRepository();
+    const listTransactions = vi.fn<(query: PayPalTransactionQuery) => Promise<PayPalTransactionSearchResult>>(async () => ({
+      transactionDetails: [transactionDetail],
+      page: 1,
+      totalPages: 1,
+      totalItems: 1,
+    }));
     const adapter = new PayPalSandboxDataAdapter({
       repository,
       persistence: "memory_cache",
       now: () => new Date("2026-10-03T10:00:00.000Z"),
-      transactionService: {
-        listTransactions: async () => ({
-          transactionDetails: [transactionDetail],
-          page: 1,
-          totalPages: 1,
-          totalItems: 1,
-        }),
-      },
+      transactionService: { listTransactions },
     });
 
     const result = await adapter.syncRecentTransactions();
@@ -61,6 +64,10 @@ describe("PayPalSandboxDataAdapter", () => {
       totalTransactionValue: 75,
       customerCount: 1,
     });
+    expect(listTransactions).toHaveBeenCalledTimes(6);
+    for (const [query] of listTransactions.mock.calls) {
+      expect(query.endDate.getTime() - query.startDate.getTime()).toBeLessThanOrEqual(31 * 24 * 60 * 60 * 1_000);
+    }
   });
 
   it("displays only the current bounded provider response, not older persisted history", async () => {

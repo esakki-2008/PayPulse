@@ -1,9 +1,6 @@
 import { IntelligenceLab } from "@/components/intelligence/intelligence-lab";
 import { DataSourceUnavailable } from "@/components/ui/data-source-unavailable";
-import {
-  DataSourceError,
-  getDashboardForSource,
-} from "@/server/data/provider";
+import { DataSourceError, getIntelligenceForSource } from "@/server/data/provider";
 import { dataSourceFromSearchParams } from "@/server/data/page-source";
 
 interface IntelligencePageProps {
@@ -13,8 +10,8 @@ interface IntelligencePageProps {
 export default async function IntelligencePage({ searchParams }: IntelligencePageProps) {
   const source = await dataSourceFromSearchParams(searchParams);
   try {
-    const result = await getDashboardForSource(source);
-    return <IntelligenceLab signals={result.data.signals} source={source} />;
+    const result = await getIntelligenceForSource(source);
+    return <IntelligenceLab intelligence={result.data} />;
   } catch (error) {
     if (error instanceof DataSourceError) {
       return <DataSourceUnavailable message={error.message} category={error.category} path="/intelligence" />;

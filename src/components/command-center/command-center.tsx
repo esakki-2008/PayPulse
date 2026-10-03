@@ -32,7 +32,15 @@ import type {
 
 type ApprovalState = "idle" | "saving" | "success" | "error";
 
-export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapshot }) {
+export function CommandCenter({
+  snapshot,
+  deterministicInsightCount = 0,
+  customerStates = {},
+}: {
+  readonly snapshot: DashboardSnapshot;
+  readonly deterministicInsightCount?: number;
+  readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>;
+}) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [actions, setActions] = useState(snapshot.actions);
@@ -44,8 +52,9 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
   const coreState = useMemo<CoreState>(() => {
     if (actions.some((action) => action.status === "awaiting_approval")) return "awaiting_approval";
     if (actions.some((action) => action.status === "approved")) return "approved";
+    if (deterministicInsightCount > 0) return "insight_detected";
     return snapshot.coreState;
-  }, [actions]);
+  }, [actions, deterministicInsightCount, snapshot.coreState]);
 
   async function approveSelectedAction(): Promise<void> {
     if (!selectedAction || !["recommended", "awaiting_approval"].includes(selectedAction.status)) {
@@ -96,7 +105,7 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
             {snapshot.source === "demo" ? <>Payments, understood <span className="text-cyan-200">before</span> they become problems.</> : <>Sandbox payments, <span className="text-violet-200">normalized</span> for clarity.</>}
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400">
-            {snapshot.source === "demo" ? "Revenue is down 18% this week. The agent found 7 customer payment patterns that need a human decision." : `${snapshot.metrics.transactionCount} PayPal Sandbox transactions are represented in the payment universe. Payment DNA and AI intelligence are intentionally preparing in later phases.`}
+            {snapshot.source === "demo" ? "Explicit demo records power this visual mode. Deterministic intelligence remains evidence-bound." : `${snapshot.metrics.transactionCount} PayPal Sandbox transactions are represented in the payment universe. ${deterministicInsightCount ? `${deterministicInsightCount} evidence-backed deterministic insight${deterministicInsightCount === 1 ? "" : "s"} detected.` : "Insufficient transaction history for behavioral analysis."}`}
           </p>
         </div>
         <DataSourceSwitch source={snapshot.source} sandboxConnected={snapshot.source === "paypal_sandbox"} />
@@ -118,13 +127,14 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
             <IntelligenceCore
               state={coreState}
               customers={snapshot.customers}
-              onCustomerSelect={(customerId) => router.push(`/customers/${customerId}`)}
+              customerStates={customerStates}
+              onCustomerSelect={(customerId) => router.push(`/customers/${customerId}${snapshot.source === "demo" ? "?source=demo" : ""}`)}
             />
           </div>
           <div className="relative mt-3 grid gap-2 px-2 sm:grid-cols-3">
-            <SignalChip icon={<Radar size={14} />} label="7 patterns" detail="outside baseline" />
-            <SignalChip icon={<CircleAlert size={14} />} label="2 risk signals" detail="need review" tone="amber" />
-            <SignalChip icon={<ShieldCheck size={14} />} label="Human gate" detail="approval required" tone="violet" />
+            <SignalChip icon={<Radar size={14} />} label={`${deterministicInsightCount} insights`} detail="evidence-backed" />
+            <SignalChip icon={<CircleAlert size={14} />} label={deterministicInsightCount ? "patterns detected" : "insufficient history"} detail={deterministicInsightCount ? "review evidence" : "no behavior invented"} tone="amber" />
+            <SignalChip icon={<ShieldCheck size={14} />} label="Execution disabled" detail="read-only analysis" tone="violet" />
           </div>
         </Panel>
 

@@ -76,6 +76,115 @@ export interface Customer {
   readonly source: DataSource;
 }
 
+export type PaymentBehaviorState =
+  | "stable"
+  | "growing"
+  | "declining"
+  | "irregular"
+  | "inactive"
+  | "insufficient_data";
+
+export interface CurrencyPaymentMetrics {
+  readonly currency: string;
+  readonly transactionCount: number;
+  readonly totalPaymentValue: number;
+  readonly averagePaymentValue: number | null;
+  readonly medianPaymentValue: number | null;
+  readonly largestPaymentValue: number | null;
+  readonly smallestPaymentValue: number | null;
+  readonly recentPaymentValue: number | null;
+  readonly historicalPaymentValue: number | null;
+  readonly recentTransactionCount: number;
+  readonly historicalTransactionCount: number;
+  readonly valueChangePercent: number | null;
+}
+
+export interface PaymentDnaProfile {
+  readonly customerId: string;
+  readonly source: DataSource;
+  readonly generatedAt: string;
+  readonly transactionCount: number;
+  readonly firstPaymentAt: string | null;
+  readonly lastPaymentAt: string | null;
+  readonly daysSinceLastPayment: number | null;
+  readonly observedHistoryDays: number | null;
+  readonly averageDaysBetweenPayments: number | null;
+  readonly paymentFrequencyPer30Days: number | null;
+  readonly paymentStatusDistribution: Readonly<Record<TransactionStatus, number>>;
+  readonly currencyDistribution: Readonly<Record<string, number>>;
+  readonly currencyMetrics: readonly CurrencyPaymentMetrics[];
+  readonly volatility: number | null;
+  readonly consistencyScore: number | null;
+  readonly behaviorChangeScore: number | null;
+  readonly state: PaymentBehaviorState;
+  readonly explanation: string;
+  readonly limitations: readonly string[];
+  readonly sufficientForBehavioralAnalysis: boolean;
+}
+
+export type InsightType =
+  | "customer_decline"
+  | "payment_anomaly"
+  | "activity_drop"
+  | "revenue_change"
+  | "customer_growth"
+  | "payment_pattern_change"
+  | "insufficient_data";
+
+export interface InsightEvidence {
+  readonly label: string;
+  readonly value: string;
+  readonly transactionIds: readonly string[];
+}
+
+export interface Insight {
+  readonly id: string;
+  readonly type: InsightType;
+  readonly title: string;
+  readonly summary: string;
+  readonly severity: Severity;
+  readonly confidence: number;
+  readonly evidence: readonly InsightEvidence[];
+  readonly affectedCustomerIds: readonly string[];
+  readonly affectedTransactionIds: readonly string[];
+  readonly source: DataSource;
+  readonly generatedAt: string;
+  readonly methodology: string;
+}
+
+export interface RevenueCurrencyMetrics {
+  readonly currency: string;
+  readonly transactionCount: number;
+  readonly totalPaymentValue: number;
+  readonly averagePaymentValue: number | null;
+  readonly recentPaymentValue: number | null;
+  readonly historicalPaymentValue: number | null;
+  readonly recentTransactionCount: number;
+  readonly historicalTransactionCount: number;
+  readonly valueChangePercent: number | null;
+}
+
+export interface DeterministicIntelligence {
+  readonly source: DataSource;
+  readonly generatedAt: string;
+  readonly methodology: string;
+  readonly customerProfiles: readonly PaymentDnaProfile[];
+  readonly revenueByCurrency: readonly RevenueCurrencyMetrics[];
+  readonly insights: readonly Insight[];
+  readonly customerActivityCount: number;
+  readonly repeatCustomerActivityCount: number;
+}
+
+export interface AiInsightExplanation {
+  readonly title: string;
+  readonly summary: string;
+  readonly reasoning: string;
+  readonly recommendedNextStep: string;
+  readonly confidence: "low" | "medium" | "high";
+  readonly evidenceReferences: readonly string[];
+  readonly limitations: string;
+}
+
 export interface IntelligenceSignal {
   readonly id: string;
   readonly title: string;

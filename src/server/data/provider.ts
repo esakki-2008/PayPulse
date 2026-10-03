@@ -4,6 +4,7 @@ import { PayPalProviderError } from "../paypal/provider-error";
 import { PayPalTokenRequestError } from "../paypal/token-service";
 import { getDemoDashboardSnapshot } from "../dashboard/service";
 import { getDemoRepository } from "../database/demo-store";
+import { buildDeterministicIntelligence } from "../intelligence/deterministic-intelligence";
 import type {
   Customer,
   DashboardSnapshot,
@@ -63,6 +64,24 @@ export async function getDashboardForSource(
 
   const sandbox = await getSandboxDataSafely();
   return sandboxResult(sandbox, sandbox.snapshot);
+}
+
+export async function getIntelligenceForSource(
+  source: DataSource,
+): Promise<DataSourceResult<ReturnType<typeof buildDeterministicIntelligence>>> {
+  const dashboard = await getDashboardForSource(source);
+  return {
+    data: buildDeterministicIntelligence(
+      dashboard.data.customers,
+      dashboard.data.transactions,
+      source,
+      new Date(dashboard.data.generatedAt),
+    ),
+    source: dashboard.source,
+    environment: dashboard.environment,
+    generatedAt: dashboard.generatedAt,
+    persistence: dashboard.persistence,
+  };
 }
 
 export async function getTransactionsForSource(
