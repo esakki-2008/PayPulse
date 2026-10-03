@@ -55,6 +55,9 @@ export function CommandCenter({
 
   const selectedAction = actions.find((action) => action.id === selectedActionId) ?? actions[0];
   const coreState = useMemo<CoreState>(() => {
+    if (agentActions.some((action) => action.status === "executing")) return "executing";
+    if (agentActions.some((action) => action.status === "failed")) return "failed";
+    if (agentActions.some((action) => action.status === "succeeded")) return "completed";
     if (agentActions.some((action) => action.status === "ready_for_execution" || action.status === "approved")) return "approved";
     if (agentActions.some((action) => action.status === "proposed")) return "recommending";
     if (actions.some((action) => action.status === "awaiting_approval")) return "awaiting_approval";
@@ -141,7 +144,7 @@ export function CommandCenter({
           <div className="relative mt-3 grid gap-2 px-2 sm:grid-cols-3">
             <SignalChip icon={<Radar size={14} />} label={`${deterministicInsightCount} insights`} detail="evidence-backed" />
             <SignalChip icon={<CircleAlert size={14} />} label={`${agentActions.length} action candidates`} detail={agentActions.length ? "merchant review" : "none generated"} tone="amber" />
-            <SignalChip icon={<ShieldCheck size={14} />} label="Execution disabled" detail="approval only" tone="violet" />
+            <SignalChip icon={<ShieldCheck size={14} />} label={`${agentActions.filter((action) => action.status === "succeeded").length} confirmed outcomes`} detail={agentActions.some((action) => action.status === "failed") ? "failed outcomes require review" : "write capability remains closed"} tone="violet" />
           </div>
         </Panel>
 
@@ -248,7 +251,7 @@ function SystemStatus({ coreState, source }: { readonly coreState: CoreState; re
       <div className="mt-5 space-y-3 text-xs">
         <SystemLine label="Intelligence core" value={titleCase(coreState)} live />
         <SystemLine label="Data mode" value={source === "paypal_sandbox" ? "PayPal Sandbox" : "Explicit demo data"} />
-        <SystemLine label="PayPal execution" value="Disabled until Phase 8+" />
+        <SystemLine label="PayPal execution" value="Capability-gated; no verified write operation" />
       </div>
     </Panel>
   );
@@ -411,7 +414,11 @@ function IntelligenceFeed({ signals }: { readonly signals: readonly Intelligence
 }
 
 function CoreStateLabel({ state }: { readonly state: CoreState }) {
-  const status = state === "awaiting_approval" ? "awaiting_approval" : state === "approved" ? "approved" : "analyzing";
+  const status = state === "awaiting_approval" ? "awaiting_approval"
+    : state === "approved" ? "approved"
+      : state === "executing" ? "executing"
+        : state === "completed" ? "succeeded"
+          : state === "failed" ? "failed" : "analyzing";
   return <StatusPill status={status as ActionStatus} />;
 }
 

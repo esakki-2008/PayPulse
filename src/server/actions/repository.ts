@@ -12,6 +12,8 @@ export interface AgentActionRepository {
   saveAction(action: ActionCandidate): Promise<ActionCandidate>;
   listEvents(source: DataSource, actionId?: string): Promise<readonly AgentActionEvent[]>;
   appendEvent(event: AgentActionEvent): Promise<void>;
+  /** Compare-and-swap action state plus audit event in one repository operation. */
+  transitionExecutionAction(action: ActionCandidate, event: AgentActionEvent): Promise<ActionCandidate | null>;
   getPlan(source: DataSource, planId: string): Promise<AgentActionPlan | null>;
   findPlanByFingerprint(source: DataSource, fingerprint: string): Promise<AgentActionPlan | null>;
   savePlan(plan: AgentActionPlan): Promise<AgentActionPlan>;
@@ -37,6 +39,13 @@ class MemoryAgentActionRepository implements AgentActionRepository {
     return this.events.filter((event) => event.source === source && (!actionId || event.actionId === actionId));
   }
   async appendEvent(event: AgentActionEvent): Promise<void> { this.events.push(event); }
+  async transitionExecutionAction(action: ActionCandidate, event: AgentActionEvent): Promise<ActionCandidate | null> {
+    const current = this.actions.get(action.id);
+    if (!current || current.source !== action.source || current.status !== event.previousStatus || current.version !== action.version - 1) return null;
+    this.actions.set(action.id, action);
+    this.events.push(event);
+    return action;
+  }
   async getPlan(source: DataSource, planId: string): Promise<AgentActionPlan | null> {
     const plan = this.plans.get(planId); return plan?.source === source ? plan : null;
   }
@@ -73,6 +82,18 @@ class PostgresAgentActionRepository implements AgentActionRepository {
   }
   async appendEvent(event: AgentActionEvent): Promise<void> {
     await this.sql.query(`INSERT INTO action_events (id, action_id, payload) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO NOTHING`, [event.id, event.actionId, JSON.stringify(event)]);
+  }
+  async transitionExecutionAction(action: ActionCandidate, event: AgentActionEvent): Promise<ActionCandidate | null> {
+    const result = await this.sql.query<{ id: string }>(`WITH updated AS (
+      UPDATE actions SET payload = $1::jsonb, status = $2, version = $3, updated_at = NOW()
+      WHERE merchant_id = $4 AND id = $5 AND status = $6 AND version = $7
+      RETURNING id
+    )
+    INSERT INTO action_events (id, action_id, payload)
+    SELECT $8, id, $9::jsonb FROM updated
+    ON CONFLICT (id) DO NOTHING
+    RETURNING action_id AS id`, [JSON.stringify(action), action.status, action.version, this.merchantId, action.id, event.previousStatus, action.version - 1, event.id, JSON.stringify(event)]);
+    return result.rows[0] ? action : null;
   }
   async getPlan(source: DataSource, planId: string): Promise<AgentActionPlan | null> {
     const result = await this.sql.query<{ payload: AgentActionPlan | string }>(`SELECT payload FROM action_plans WHERE merchant_id = $1 AND id = $2 AND payload->>'source' = $3 LIMIT 1`, [this.merchantId, planId, source]);

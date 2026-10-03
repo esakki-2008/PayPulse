@@ -120,6 +120,26 @@ export async function markReadyForExecution(source: DataSource, actionId: string
   return transition(source, actionId, version, "ready_for_execution", "Merchant marked action ready for a future execution phase.", repository);
 }
 
+/** Server-only execution lifecycle transition. Merchant routes cannot set it. */
+export async function transitionAgentActionExecution(
+  action: ActionCandidate,
+  nextStatus: "executing" | "succeeded" | "failed",
+  reason: string,
+  repository: AgentActionRepository = getAgentActionRepository(),
+): Promise<ActionCandidate> {
+  const current = await getActionForSource(action.source, action.id, repository);
+  if (!current) throw new AgentActionNotFoundError("Action not found in the selected data source.");
+  if (current.version !== action.version) throw new AgentActionStateError("This action changed during execution. No further operation was attempted.");
+  const valid = (nextStatus === "executing" && current.status === "ready_for_execution")
+    || ((nextStatus === "succeeded" || nextStatus === "failed") && current.status === "executing");
+  if (!valid) throw new AgentActionStateError("This execution transition is not allowed.");
+  const updatedCandidate = { ...current, status: nextStatus, version: current.version + 1 } as ActionCandidate;
+  const event: AgentActionEvent = { id: randomUUID(), actionId: current.id, previousStatus: current.status, newStatus: nextStatus, actor: "system", timestamp: new Date().toISOString(), reason, source: current.source };
+  const updated = await repository.transitionExecutionAction(updatedCandidate, event);
+  if (!updated) throw new AgentActionStateError("This action changed during execution. No further operation was attempted.");
+  return updated;
+}
+
 async function transition(source: DataSource, actionId: string, version: number, nextStatus: AgentActionStatus, reason: string, repository: AgentActionRepository): Promise<ActionCandidate> {
   const action = await getActionForSource(source, actionId, repository);
   if (!action) throw new AgentActionNotFoundError("Action not found in the selected data source.");
@@ -146,10 +166,13 @@ async function expireIfNeeded(action: ActionCandidate, repository: AgentActionRe
 
 async function refreshPlanStatus(plan: AgentActionPlan, repository: AgentActionRepository): Promise<AgentActionPlan> {
   const actions = await Promise.all(plan.actions.map((action) => getActionForSource(plan.source, action.id, repository).then((current) => current ?? action)));
-  const status = actions.every((action) => action.status === "ready_for_execution") ? "ready_for_execution"
-    : actions.some((action) => action.status === "approved") ? "approved"
-      : actions.every((action) => action.status === "rejected") ? "rejected"
-        : actions.every((action) => action.status === "expired") ? "expired" : "proposed";
+  const status = actions.every((action) => action.status === "succeeded") ? "succeeded"
+    : actions.some((action) => action.status === "executing") ? "executing"
+      : actions.some((action) => action.status === "failed") ? "failed"
+        : actions.every((action) => action.status === "ready_for_execution") ? "ready_for_execution"
+          : actions.some((action) => action.status === "approved") ? "approved"
+            : actions.every((action) => action.status === "rejected") ? "rejected"
+              : actions.every((action) => action.status === "expired") ? "expired" : "proposed";
   const refreshed = { ...plan, actions, status } as AgentActionPlan;
   return repository.savePlan(refreshed);
 }

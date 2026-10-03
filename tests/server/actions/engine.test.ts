@@ -27,6 +27,7 @@ class FakeActionRepository implements AgentActionRepository {
   async saveAction(action: ActionCandidate) { this.actions.set(action.id, action); return action; }
   async listEvents(source: ActionCandidate["source"], id?: string) { return this.events.filter((event) => event.source === source && (!id || event.actionId === id)); }
   async appendEvent(event: AgentActionEvent) { this.events.push(event); }
+  async transitionExecutionAction(action: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(action.id); if (!current || current.version !== action.version - 1 || current.status !== event.previousStatus) return null; this.actions.set(action.id, action); this.events.push(event); return action; }
   async getPlan(source: ActionCandidate["source"], id: string) { const plan = this.plans.get(id); return plan?.source === source ? plan : null; }
   async findPlanByFingerprint(source: ActionCandidate["source"], fingerprint: string) { return [...this.plans.values()].find((plan) => plan.source === source && plan.fingerprint === fingerprint) ?? null; }
   async savePlan(plan: AgentActionPlan) { this.plans.set(plan.id, plan); return plan; }
@@ -90,9 +91,12 @@ describe("Phase 6 action engine", () => {
     await expect(approveAgentAction("paypal_sandbox", action.id, expired?.version ?? 1, undefined, repository)).rejects.toThrow("Expired");
   });
 
-  it("keeps the execution endpoint hard-disabled without any PayPal write call", async () => {
-    const response = await executeAction();
+  it("keeps Demo execution disabled and isolated from PayPal Sandbox", async () => {
+    const response = await executeAction(
+      new Request("http://localhost/api/actions/action-one/execute?source=demo", { method: "POST", body: "{}" }),
+      { params: Promise.resolve({ actionId: "action-one" }) },
+    );
     expect(response.status).toBe(501);
-    await expect(response.json()).resolves.toMatchObject({ error: "PayPal action execution is reserved for the execution phase.", executionOccurred: false });
+    await expect(response.json()).resolves.toMatchObject({ error: "Demo execution is disabled. Demo data is never mapped to PayPal Sandbox.", executionOccurred: false });
   });
 });

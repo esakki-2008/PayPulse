@@ -1,7 +1,7 @@
 import { titleCase } from "@/lib/format";
-import type { ActionStatus, Severity } from "@/types/domain";
+import type { ActionStatus, AgentActionStatus, Severity } from "@/types/domain";
 
-type Status = ActionStatus | Severity | "demo" | "sandbox" | "online";
+type Status = ActionStatus | AgentActionStatus | Severity | "demo" | "sandbox" | "online";
 
 const toneByStatus: Record<Status, string> = {
   low: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
@@ -17,6 +17,11 @@ const toneByStatus: Record<Status, string> = {
   completed: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
   learned: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
   rejected: "border-slate-300/25 bg-slate-300/10 text-slate-200",
+  proposed: "border-violet-300/25 bg-violet-300/10 text-violet-100",
+  ready_for_execution: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
+  succeeded: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
+  failed: "border-rose-300/25 bg-rose-300/10 text-rose-100",
+  expired: "border-slate-300/25 bg-slate-300/10 text-slate-200",
   demo: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
   sandbox: "border-violet-300/25 bg-violet-300/10 text-violet-100",
   online: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",

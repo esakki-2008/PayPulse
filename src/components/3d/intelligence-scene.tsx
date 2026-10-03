@@ -17,6 +17,7 @@ const stateColors: Record<CoreState, string> = {
   approved: "#34d399",
   executing: "#c084fc",
   completed: "#2dd4bf",
+  failed: "#fb7185",
   learning: "#67e8f9",
 };
 

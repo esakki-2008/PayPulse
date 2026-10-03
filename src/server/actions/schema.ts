@@ -19,5 +19,5 @@ export const actionCandidateSchema = z.object({
   limitations: z.array(z.string().min(1)).min(1),
   createdAt: z.string().datetime({ offset: true }),
   expiresAt: z.string().datetime({ offset: true }),
-  status: z.enum(["proposed", "approved", "rejected", "expired", "ready_for_execution"]),
+  status: z.enum(["proposed", "approved", "rejected", "expired", "ready_for_execution", "executing", "succeeded", "failed"]),
 }).strict();

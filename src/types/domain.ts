@@ -10,6 +10,7 @@ export type CoreState =
   | "approved"
   | "executing"
   | "completed"
+  | "failed"
   | "learning";
 
 export type Severity = "low" | "medium" | "high" | "critical";
@@ -269,7 +270,10 @@ export type AgentActionStatus =
   | "approved"
   | "rejected"
   | "expired"
-  | "ready_for_execution";
+  | "ready_for_execution"
+  | "executing"
+  | "succeeded"
+  | "failed";
 
 export interface ActionEvidence {
   readonly type: "customer_metric" | "historical_pattern" | "transaction_pattern" | "revenue_metric" | "insight";
@@ -310,7 +314,7 @@ export interface AgentActionPlan {
   readonly totalActions: number;
   readonly createdAt: string;
   readonly expiresAt: string;
-  readonly status: "proposed" | "approved" | "rejected" | "expired" | "ready_for_execution";
+  readonly status: AgentActionStatus;
 }
 
 export interface AgentActionEvent {
@@ -318,10 +322,38 @@ export interface AgentActionEvent {
   readonly actionId: string;
   readonly previousStatus: AgentActionStatus;
   readonly newStatus: AgentActionStatus;
-  readonly actor: "merchant";
+  readonly actor: "merchant" | "system";
   readonly timestamp: string;
   readonly reason: string | null;
   readonly source: DataSource;
+}
+
+export type ExecutionOutcomeStatus = "succeeded" | "failed" | "pending" | "capability_unavailable";
+export type ExecutionErrorCategory =
+  | "configuration"
+  | "authentication"
+  | "authorization"
+  | "capability"
+  | "validation"
+  | "conflict"
+  | "expired"
+  | "provider"
+  | "rate_limit"
+  | "network"
+  | "unknown";
+
+export interface ExecutionOutcome {
+  readonly executionId: string;
+  readonly actionId: string;
+  readonly source: "paypal_sandbox";
+  readonly provider: "paypal_sandbox";
+  readonly operation: "capture_order" | "capability_check";
+  readonly status: ExecutionOutcomeStatus;
+  readonly paypalReference: string | null;
+  readonly timestamp: string;
+  readonly summary: string;
+  readonly idempotencyKey: string;
+  readonly failureCategory: ExecutionErrorCategory | null;
 }
 
 export interface DashboardMetrics {
