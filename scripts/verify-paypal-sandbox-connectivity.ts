@@ -1,5 +1,12 @@
-import { verifyPayPalSandboxConnectivity } from "../src/server/paypal/connectivity.js";
+import { loadPayPalSandboxCliEnvironment } from "../src/server/paypal/cli-environment.js";
 
+// Unlike Next.js, a standalone tsx process does not load .env.local itself.
+// Load it before importing any OAuth/configuration code; no values are printed.
+loadPayPalSandboxCliEnvironment();
+
+const { verifyPayPalSandboxConnectivity } = await import(
+  "../src/server/paypal/connectivity.js"
+);
 const report = await verifyPayPalSandboxConnectivity();
 
 // The report type intentionally excludes credentials, authorization headers,

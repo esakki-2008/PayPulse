@@ -35,7 +35,7 @@ PayPulse does not support a live endpoint in this configuration. `PAYPAL_ENVIRON
 
 ## Validation and verification
 
-The configuration layer checks for all required variables and allows only the literal Sandbox environment. Configuration errors name invalid variable keys but never include their values.
+The configuration layer checks for all required variables and allows only the literal Sandbox environment. Configuration errors name invalid variable keys but never include their values. `npm run verify:paypal-sandbox` explicitly loads the untracked `.env.local` through Next.js's server-side environment loader before importing the OAuth modules, so no manual shell export is required.
 
 Run the local checks after dependencies are installed:
 

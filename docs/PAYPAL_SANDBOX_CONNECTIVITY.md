@@ -30,23 +30,20 @@ Any environment other than `sandbox` is rejected. The API base URL cannot be ove
 
 2. Populate `.env.local` on your own machine with the Sandbox Client ID and Client Secret from the PayPal Developer Dashboard. Do not paste the values into chat, source code, Git, documentation, or a browser environment.
 3. Keep `PAYPAL_ENVIRONMENT=sandbox`.
-4. Make the variables available to your shell without printing them. On macOS/Linux, from the repository root:
-
-   ```bash
-   set -a
-   . ./.env.local
-   set +a
-   ```
-
-   Use your platform’s equivalent secure environment-loading workflow on other systems.
 
 ## Run the connectivity check
 
-After making the variables available to the shell, run:
+From the repository root, run:
 
 ```bash
 npm run verify:paypal-sandbox
 ```
+
+The standalone CLI explicitly uses Next.js's supported environment loader before
+it imports the PayPal configuration/OAuth modules. Therefore it reads the
+untracked `.env.local` using the same local-environment convention as the Next
+application; there is no need to source, print, or export credentials manually.
+Existing shell environment variables retain their normal Next.js precedence.
 
 The command performs a server-side request to:
 
@@ -87,6 +84,6 @@ This test executes the real Sandbox OAuth call only when both `PAYPAL_CLIENT_ID`
 - The OAuth service exists only under `src/server/paypal/` and imports Node-only APIs.
 - The Client Secret is used only to create the server-to-server Basic authentication header.
 - Access tokens remain in process memory only and refresh one minute before expiry; they are never persisted.
-- No source module logs request headers, credentials, raw provider payloads, or access tokens.
+- No source module logs request headers, credentials, raw provider payloads, or access tokens. The CLI environment loader is silent and the verifier prints only its safe report.
 - `.env.local`, `.env.*`, `*.env`, and PayPal-specific local environment files are ignored by Git. `.env.example` contains placeholders only.
 - This verification uses only PayPal Sandbox and makes no payment or real-money transaction.

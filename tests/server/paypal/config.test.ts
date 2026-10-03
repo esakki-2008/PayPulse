@@ -35,17 +35,19 @@ describe("getPayPalSandboxConfig", () => {
     );
   });
 
-  it("rejects non-Sandbox environments", () => {
+  it("rejects non-Sandbox environments without echoing configured values", () => {
     const environment = {
-      ...sandboxEnvironment,
+      PAYPAL_CLIENT_ID: "client-id-not-for-error-output",
+      PAYPAL_CLIENT_SECRET: "client-secret-not-for-error-output",
       PAYPAL_ENVIRONMENT: "live",
     };
 
-    expect(() => getPayPalSandboxConfig(environment)).toThrow(
-      PayPalConfigurationError,
-    );
-    expect(() => getPayPalSandboxConfig(environment)).toThrow(
-      "PAYPAL_ENVIRONMENT",
-    );
+    let error: unknown;
+    try { getPayPalSandboxConfig(environment); } catch (caught) { error = caught; }
+    expect(error).toBeInstanceOf(PayPalConfigurationError);
+    const message = error instanceof Error ? error.message : "";
+    expect(message).toContain("PAYPAL_ENVIRONMENT");
+    expect(message).not.toContain(environment.PAYPAL_CLIENT_ID);
+    expect(message).not.toContain(environment.PAYPAL_CLIENT_SECRET);
   });
 });

@@ -16,6 +16,7 @@
     "verify:paypal-sandbox": "tsx scripts/verify-paypal-sandbox-connectivity.ts"
   },
   "dependencies": {
+    "@next/env": "^16.3.8",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
     "framer-motion": "^14.0.0",
