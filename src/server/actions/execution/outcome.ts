@@ -5,6 +5,8 @@ import type { ExecutionOutcome, ExecutionOutcomeStatus } from "@/types/domain";
 
 export interface ExecutionOutcomeRepository {
   findByIdempotencyKey(idempotencyKey: string): Promise<ExecutionOutcome | null>;
+  getByExecutionId(executionId: string): Promise<ExecutionOutcome | null>;
+  listByActionId(actionId: string): Promise<readonly ExecutionOutcome[]>;
   /** Atomically reserves an idempotency key. A pending record is also the execution lock. */
   claim(input: Omit<ExecutionOutcome, "executionId" | "timestamp" | "status"> & { readonly status?: "pending" }): Promise<{ readonly claimed: boolean; readonly outcome: ExecutionOutcome }>;
   save(outcome: ExecutionOutcome): Promise<ExecutionOutcome>;
@@ -27,6 +29,12 @@ export class MemoryExecutionOutcomeRepository implements ExecutionOutcomeReposit
 
   async findByIdempotencyKey(idempotencyKey: string): Promise<ExecutionOutcome | null> {
     return this.outcomes.get(idempotencyKey) ?? null;
+  }
+  async getByExecutionId(executionId: string): Promise<ExecutionOutcome | null> {
+    return [...this.outcomes.values()].find((outcome) => outcome.executionId === executionId) ?? null;
+  }
+  async listByActionId(actionId: string): Promise<readonly ExecutionOutcome[]> {
+    return [...this.outcomes.values()].filter((outcome) => outcome.actionId === actionId).sort((left, right) => left.timestamp.localeCompare(right.timestamp));
   }
 
   async claim(input: Omit<ExecutionOutcome, "executionId" | "timestamp" | "status"> & { readonly status?: "pending" }): Promise<{ readonly claimed: boolean; readonly outcome: ExecutionOutcome }> {
@@ -56,6 +64,20 @@ class PostgresExecutionOutcomeRepository implements ExecutionOutcomeRepository {
       [this.merchantId, idempotencyKey],
     );
     return result.rows[0] ? toOutcome(result.rows[0]) : null;
+  }
+  async getByExecutionId(executionId: string): Promise<ExecutionOutcome | null> {
+    const result = await this.sql.query<ExecutionRow>(
+      "SELECT execution_id, action_id, source, provider, operation, status, paypal_reference, failure_category, summary, idempotency_key, updated_at FROM action_executions WHERE merchant_id = $1 AND execution_id = $2 LIMIT 1",
+      [this.merchantId, executionId],
+    );
+    return result.rows[0] ? toOutcome(result.rows[0]) : null;
+  }
+  async listByActionId(actionId: string): Promise<readonly ExecutionOutcome[]> {
+    const result = await this.sql.query<ExecutionRow>(
+      "SELECT execution_id, action_id, source, provider, operation, status, paypal_reference, failure_category, summary, idempotency_key, updated_at FROM action_executions WHERE merchant_id = $1 AND action_id = $2 ORDER BY updated_at ASC",
+      [this.merchantId, actionId],
+    );
+    return result.rows.map(toOutcome);
   }
 
   async claim(input: Omit<ExecutionOutcome, "executionId" | "timestamp" | "status"> & { readonly status?: "pending" }): Promise<{ readonly claimed: boolean; readonly outcome: ExecutionOutcome }> {

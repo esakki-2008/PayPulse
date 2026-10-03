@@ -1,5 +1,6 @@
 import type {
   CurrencyPaymentMetrics,
+  OutcomeHistory,
   PaymentDnaProfile,
   Transaction,
   TransactionStatus,
@@ -29,6 +30,7 @@ export function calculatePaymentDna(
   customerTransactions: readonly Transaction[],
   source: PaymentDnaProfile["source"],
   now = new Date(),
+  outcomeHistory: OutcomeHistory = emptyOutcomeHistory(),
 ): PaymentDnaProfile {
   const generatedAt = now.toISOString();
   const chronological = [...customerTransactions].sort((left, right) =>
@@ -117,6 +119,7 @@ export function calculatePaymentDna(
     volatility,
     consistencyScore,
     behaviorChangeScore,
+    outcomeHistory,
     state: classification.state,
     explanation: classification.explanation,
     limitations,
@@ -235,6 +238,10 @@ function buildLimitations(input: {
     limitations.push("Available observations do not satisfy the behavioral comparison criteria.");
   }
   return limitations;
+}
+
+function emptyOutcomeHistory(): OutcomeHistory {
+  return { succeeded: 0, failed: 0, unknown: 0, pending: 0, latestOutcomeAt: null };
 }
 
 function dayDifference(later: Date, earlier: Date): number {

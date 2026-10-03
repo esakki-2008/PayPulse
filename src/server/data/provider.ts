@@ -10,6 +10,7 @@ import { PayPalProviderError } from "../paypal/provider-error";
 import { PayPalTokenRequestError } from "../paypal/token-service";
 import { getDemoDashboardSnapshot } from "../dashboard/service";
 import { getDemoRepository } from "../database/demo-store";
+import { getLearningProjection } from "../actions/learning/engine";
 import { buildDeterministicIntelligence } from "../intelligence/deterministic-intelligence";
 import type {
   Customer,
@@ -79,12 +80,15 @@ export async function getIntelligenceForSource(
   source: DataSource,
 ): Promise<DataSourceResult<ReturnType<typeof buildDeterministicIntelligence>>> {
   const dashboard = await getDashboardForSource(source);
+  const projection = await getLearningProjection(source);
+  const transactions = mergeVerifiedTransactions(dashboard.data.transactions, projection.derivedTransactions);
   return {
     data: buildDeterministicIntelligence(
       dashboard.data.customers,
-      dashboard.data.transactions,
+      transactions,
       source,
       new Date(dashboard.data.generatedAt),
+      projection.outcomeHistoryByCustomer,
     ),
     source: dashboard.source,
     environment: dashboard.environment,
@@ -98,8 +102,9 @@ export async function getTransactionsForSource(
   source: DataSource,
 ): Promise<DataSourceResult<readonly Transaction[]>> {
   if (source === "demo") {
+    const [transactions, projection] = await Promise.all([getDemoRepository().listTransactions(), getLearningProjection(source)]);
     return {
-      data: await getDemoRepository().listTransactions(),
+      data: mergeVerifiedTransactions(transactions, projection.derivedTransactions),
       source: "demo",
       environment: "demo",
       generatedAt: "2026-10-03T10:00:00.000Z",
@@ -107,7 +112,8 @@ export async function getTransactionsForSource(
   }
 
   const sandbox = await getSandboxDataSafely();
-  return sandboxResult(sandbox, sandbox.snapshot.transactions);
+  const projection = await getLearningProjection(source);
+  return sandboxResult(sandbox, mergeVerifiedTransactions(sandbox.snapshot.transactions, projection.derivedTransactions));
 }
 
 export async function getCustomersForSource(
@@ -144,6 +150,10 @@ export async function getCustomerForSource(
     sandbox,
     sandbox.snapshot.customers.find((customer) => customer.id === customerId) ?? null,
   );
+}
+
+function mergeVerifiedTransactions(base: readonly Transaction[], learned: readonly Transaction[]): readonly Transaction[] {
+  return [...new Map([...base, ...learned].map((transaction) => [transaction.id, transaction])).values()];
 }
 
 async function getSandboxDataSafely(): Promise<PayPalSandboxDataSnapshot> {

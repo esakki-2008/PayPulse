@@ -117,6 +117,7 @@ export interface PaymentDnaProfile {
   readonly volatility: number | null;
   readonly consistencyScore: number | null;
   readonly behaviorChangeScore: number | null;
+  readonly outcomeHistory: OutcomeHistory;
   readonly state: PaymentBehaviorState;
   readonly explanation: string;
   readonly limitations: readonly string[];
@@ -354,6 +355,96 @@ export interface ExecutionOutcome {
   readonly summary: string;
   readonly idempotencyKey: string;
   readonly failureCategory: ExecutionErrorCategory | null;
+}
+
+/** Phase 8 outcome states are distinct from a request/lock lifecycle. */
+export type VerifiedOutcomeStatus = "pending" | "succeeded" | "failed" | "unknown";
+export type OutcomeCorrelation = "verified" | "unverified";
+
+/** A fact retained only after server-side provider verification. */
+export interface VerifiedProviderFact {
+  readonly type: "provider_confirmation" | "payment_observed" | "order_status" | "failure";
+  readonly providerReference: string | null;
+  readonly observedAt: string;
+  readonly summary: string;
+  /** Optional and only present when the provider response itself verifies it. */
+  readonly payment: {
+    readonly paymentId: string;
+    readonly customerId: string;
+    readonly occurredAt: string;
+    readonly amount: number | null;
+    readonly currency: string | null;
+  } | null;
+}
+
+export interface ActionOutcomeAudit {
+  readonly executionId: string | null;
+  readonly idempotencyKey: string;
+  readonly fingerprint: string;
+  readonly recordedAt: string;
+}
+
+/** Immutable, source-qualified provider outcome. It never stores raw responses. */
+export interface ActionOutcome {
+  readonly outcomeId: string;
+  readonly actionId: string;
+  readonly actionFingerprint: string;
+  readonly actionVersion: number;
+  readonly source: DataSource;
+  readonly provider: "paypal_sandbox" | "demo";
+  readonly providerReference: string | null;
+  readonly status: VerifiedOutcomeStatus;
+  readonly timestamp: string;
+  readonly customerId: string | null;
+  readonly paymentId: string | null;
+  readonly verifiedFacts: readonly VerifiedProviderFact[];
+  readonly failureCategory: ExecutionErrorCategory | null;
+  readonly limitations: readonly string[];
+  readonly correlation: OutcomeCorrelation;
+  readonly audit: ActionOutcomeAudit;
+}
+
+export interface OutcomeHistory {
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly unknown: number;
+  readonly pending: number;
+  readonly latestOutcomeAt: string | null;
+}
+
+export interface PaymentDnaLearningSummary {
+  readonly transactionCount: number;
+  readonly lastPaymentAt: string | null;
+  readonly daysSinceLastPayment: number | null;
+  readonly paymentFrequencyPer30Days: number | null;
+  readonly averageDaysBetweenPayments: number | null;
+  readonly behaviorState: PaymentBehaviorState;
+}
+
+export interface PaymentDnaDelta {
+  readonly before: PaymentDnaLearningSummary;
+  readonly after: PaymentDnaLearningSummary;
+  readonly changedFields: readonly ("transactionCount" | "lastPaymentAt" | "daysSinceLastPayment" | "paymentFrequencyPer30Days" | "averageDaysBetweenPayments" | "behaviorState")[];
+}
+
+/** Append-only deterministic record; it never asserts financial causality. */
+export interface LearningEvent {
+  readonly learningEventId: string;
+  readonly fingerprint: string;
+  readonly type: "ACTION_OUTCOME";
+  readonly actionId: string;
+  readonly actionType: AgentActionType;
+  readonly outcomeId: string;
+  readonly customerId: string | null;
+  readonly source: DataSource;
+  readonly outcome: VerifiedOutcomeStatus;
+  readonly correlation: OutcomeCorrelation;
+  readonly verifiedFacts: readonly VerifiedProviderFact[];
+  readonly timestamp: string;
+  readonly summary: string;
+  readonly limitations: readonly string[];
+  readonly learningStatus: "applied" | "unchanged";
+  readonly dnaDelta: PaymentDnaDelta | null;
 }
 
 export interface DashboardMetrics {

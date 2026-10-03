@@ -22,6 +22,7 @@ export function buildDeterministicIntelligence(
   transactions: readonly Transaction[],
   source: DeterministicIntelligence["source"],
   now = new Date(),
+  outcomeHistoryByCustomer: Readonly<Record<string, import("@/types/domain").OutcomeHistory>> = {},
 ): DeterministicIntelligence {
   const generatedAt = now.toISOString();
   const customerProfiles = customers.map((customer) =>
@@ -30,6 +31,7 @@ export function buildDeterministicIntelligence(
       transactions.filter((transaction) => transaction.customerId === customer.id),
       source,
       now,
+      outcomeHistoryByCustomer[customer.id],
     ),
   );
   const revenueByCurrency = calculateRevenueByCurrency(transactions, now);

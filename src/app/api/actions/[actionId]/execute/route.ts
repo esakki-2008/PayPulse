@@ -4,6 +4,7 @@ import {
   ActionExecutionUnavailableError,
   executeApprovedPayPalSandboxAction,
 } from "../../../../../server/actions/execution/executor";
+import { materializeOutcomeFromExecution } from "../../../../../server/actions/learning/engine";
 import { parseDataSource } from "../../../../../server/data/provider";
 import { apiErrorResponse } from "../../../../../server/http/responses";
 
@@ -27,9 +28,15 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       actionId,
       version: inputSchema.parse(body).version,
     });
+    const learning = await materializeOutcomeFromExecution({
+      source,
+      executionId: result.outcome.executionId,
+    });
     return Response.json({
       data: {
         execution: result.outcome,
+        outcome: learning.outcome,
+        learning: learning.event,
         executionOccurred: result.executionOccurred,
         idempotent: result.idempotent,
       },

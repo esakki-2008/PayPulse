@@ -24,11 +24,13 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { formatCurrency, formatPercent, titleCase } from "@/lib/format";
 import type {
   ActionCandidate,
+  ActionOutcome,
   ActionRecommendation,
   ActionStatus,
   CoreState,
   DashboardSnapshot,
   IntelligenceSignal,
+  LearningEvent,
 } from "@/types/domain";
 
 type ApprovalState = "idle" | "saving" | "success" | "error";
@@ -38,11 +40,15 @@ export function CommandCenter({
   deterministicInsightCount = 0,
   customerStates = {},
   agentActions = [],
+  verifiedOutcomes = [],
+  learningEvents = [],
 }: {
   readonly snapshot: DashboardSnapshot;
   readonly deterministicInsightCount?: number;
   readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>;
   readonly agentActions?: readonly ActionCandidate[];
+  readonly verifiedOutcomes?: readonly ActionOutcome[];
+  readonly learningEvents?: readonly LearningEvent[];
 }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -55,16 +61,19 @@ export function CommandCenter({
 
   const selectedAction = actions.find((action) => action.id === selectedActionId) ?? actions[0];
   const coreState = useMemo<CoreState>(() => {
-    if (agentActions.some((action) => action.status === "executing")) return "executing";
-    if (agentActions.some((action) => action.status === "failed")) return "failed";
-    if (agentActions.some((action) => action.status === "succeeded")) return "completed";
+    const latestOutcome = [...verifiedOutcomes].sort((left, right) => left.timestamp.localeCompare(right.timestamp)).at(-1);
+    const latestLearning = [...learningEvents].sort((left, right) => left.timestamp.localeCompare(right.timestamp)).at(-1);
+    if (latestOutcome?.status === "pending" || agentActions.some((action) => action.status === "executing")) return "executing";
+    if (latestOutcome?.status === "failed" || agentActions.some((action) => action.status === "failed")) return "failed";
+    if (latestOutcome?.status === "succeeded" && latestLearning?.outcomeId === latestOutcome.outcomeId && latestLearning.learningStatus === "applied") return "learning";
+    if (latestOutcome?.status === "succeeded" || agentActions.some((action) => action.status === "succeeded")) return "completed";
     if (agentActions.some((action) => action.status === "ready_for_execution" || action.status === "approved")) return "approved";
     if (agentActions.some((action) => action.status === "proposed")) return "recommending";
     if (actions.some((action) => action.status === "awaiting_approval")) return "awaiting_approval";
     if (actions.some((action) => action.status === "approved")) return "approved";
     if (deterministicInsightCount > 0) return "insight_detected";
     return snapshot.coreState;
-  }, [actions, agentActions, deterministicInsightCount, snapshot.coreState]);
+  }, [actions, agentActions, deterministicInsightCount, learningEvents, snapshot.coreState, verifiedOutcomes]);
 
   async function approveSelectedAction(): Promise<void> {
     if (!selectedAction || !["recommended", "awaiting_approval"].includes(selectedAction.status)) {
@@ -144,7 +153,7 @@ export function CommandCenter({
           <div className="relative mt-3 grid gap-2 px-2 sm:grid-cols-3">
             <SignalChip icon={<Radar size={14} />} label={`${deterministicInsightCount} insights`} detail="evidence-backed" />
             <SignalChip icon={<CircleAlert size={14} />} label={`${agentActions.length} action candidates`} detail={agentActions.length ? "merchant review" : "none generated"} tone="amber" />
-            <SignalChip icon={<ShieldCheck size={14} />} label={`${agentActions.filter((action) => action.status === "succeeded").length} confirmed outcomes`} detail={agentActions.some((action) => action.status === "failed") ? "failed outcomes require review" : "write capability remains closed"} tone="violet" />
+            <SignalChip icon={<ShieldCheck size={14} />} label={`${verifiedOutcomes.length} verified outcome records`} detail={learningEvents.some((event) => event.learningStatus === "applied") ? "learning applied from stored facts" : verifiedOutcomes.some((outcome) => outcome.status === "failed") ? "failed outcomes require review" : "no financial outcome inferred"} tone="violet" />
           </div>
         </Panel>
 
@@ -418,7 +427,8 @@ function CoreStateLabel({ state }: { readonly state: CoreState }) {
     : state === "approved" ? "approved"
       : state === "executing" ? "executing"
         : state === "completed" ? "succeeded"
-          : state === "failed" ? "failed" : "analyzing";
+          : state === "failed" ? "failed"
+            : state === "learning" ? "learned" : "analyzing";
   return <StatusPill status={status as ActionStatus} />;
 }
 
