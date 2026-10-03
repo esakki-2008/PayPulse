@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import {
   assertActionIsApprovedForFutureExecution,
   requireDemoMerchantOperator,
+  requireExplicitDemoSource,
 } from "@/server/actions/service";
 import { apiErrorResponse } from "@/server/http/responses";
 
@@ -19,13 +20,14 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
   try {
     const { actionId } = await context.params;
     const input = executionSchema.parse(await request.json());
+    requireExplicitDemoSource(request);
     requireDemoMerchantOperator(request);
     await assertActionIsApprovedForFutureExecution(actionId, input.version);
 
     return NextResponse.json(
       {
         error:
-          "No execution occurred. PayPal Sandbox action execution is intentionally reserved for Phase 4.",
+          "No execution occurred. PayPal Sandbox action execution is intentionally unavailable in Phase 4 and reserved for a later approved phase.",
         phase: 4,
       },
       { status: 501 },

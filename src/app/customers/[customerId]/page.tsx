@@ -1,24 +1,44 @@
 import { notFound } from "next/navigation";
 
 import { CustomerIntelligence } from "@/components/customers/customer-intelligence";
-import { getDemoRepository } from "@/server/database/demo-store";
+import { DataSourceUnavailable } from "@/components/ui/data-source-unavailable";
+import {
+  DataSourceError,
+  getCustomerForSource,
+  getDashboardForSource,
+  getTransactionsForSource,
+} from "@/server/data/provider";
+import { dataSourceFromSearchParams } from "@/server/data/page-source";
 
 interface CustomerPageProps {
   readonly params: Promise<{ customerId: string }>;
+  readonly searchParams: Promise<{ source?: string | string[] }>;
 }
 
-export default async function CustomerPage({ params }: CustomerPageProps) {
-  const { customerId } = await params;
-  const repository = getDemoRepository();
-  const [customer, transactions, signals] = await Promise.all([
-    repository.getCustomer(customerId),
-    repository.listTransactions(),
-    repository.listSignals(),
-  ]);
+export default async function CustomerPage({ params, searchParams }: CustomerPageProps) {
+  const [{ customerId }, source] = await Promise.all([params, dataSourceFromSearchParams(searchParams)]);
 
-  if (!customer) {
-    notFound();
+  try {
+    const [customerResult, transactionsResult, dashboardResult] = await Promise.all([
+      getCustomerForSource(source, customerId),
+      getTransactionsForSource(source),
+      getDashboardForSource(source),
+    ]);
+
+    if (!customerResult.data) notFound();
+
+    return (
+      <CustomerIntelligence
+        customer={customerResult.data}
+        transactions={transactionsResult.data}
+        signals={dashboardResult.data.signals}
+        source={source}
+      />
+    );
+  } catch (error) {
+    if (error instanceof DataSourceError) {
+      return <DataSourceUnavailable message={error.message} category={error.category} path="/customers" />;
+    }
+    throw error;
   }
-
-  return <CustomerIntelligence customer={customer} transactions={transactions} signals={signals} />;
 }

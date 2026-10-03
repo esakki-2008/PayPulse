@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   approveAction,
   requireDemoMerchantOperator,
+  requireExplicitDemoSource,
 } from "@/server/actions/service";
 import { apiErrorResponse, demoDataResponse } from "@/server/http/responses";
 
@@ -18,6 +19,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
   try {
     const { actionId } = await context.params;
     const input = approvalSchema.parse(await request.json());
+    requireExplicitDemoSource(request);
     const actor = requireDemoMerchantOperator(request);
     const action = await approveAction(actionId, input.version, actor);
 

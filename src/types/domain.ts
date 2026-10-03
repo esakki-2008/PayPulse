@@ -1,3 +1,6 @@
+export type DataSource = "demo" | "paypal_sandbox";
+export type DataEnvironment = "demo" | "sandbox";
+
 export type CoreState =
   | "idle"
   | "analyzing"
@@ -12,18 +15,30 @@ export type CoreState =
 export type Severity = "low" | "medium" | "high" | "critical";
 export type Confidence = "low" | "medium" | "high";
 
-export type TransactionStatus = "completed" | "pending" | "failed" | "refunded";
+export type TransactionStatus =
+  | "completed"
+  | "pending"
+  | "failed"
+  | "refunded"
+  | "unknown";
 
 export interface Transaction {
   readonly id: string;
-  readonly customerId: string;
+  readonly paypalTransactionId: string | null;
+  readonly paypalOrderId: string | null;
+  readonly customerId: string | null;
   readonly amount: number;
-  readonly currency: "USD";
+  readonly currency: string;
   readonly status: TransactionStatus;
+  readonly paymentMethod: string | null;
+  readonly payerReference: string | null;
+  readonly rawReference: string | null;
   readonly occurredAt: string;
-  readonly relationship: "new" | "repeat" | "at_risk";
-  readonly source: "demo" | "paypal_sandbox";
-  readonly aiInterpretation: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly relationship: "new" | "repeat" | "at_risk" | "unattributed";
+  readonly source: DataSource;
+  readonly aiInterpretation: string | null;
 }
 
 export interface PaymentDna {
@@ -39,14 +54,26 @@ export interface PaymentDna {
 
 export interface Customer {
   readonly id: string;
-  readonly name: string;
+  readonly paypalCustomerId: string | null;
+  readonly payerReference: string | null;
+  readonly name: string | null;
+  readonly displayName: string;
   readonly initials: string;
-  readonly segment: "repeat" | "new" | "at_risk";
-  readonly relationshipValue: number;
-  readonly lastPaymentAt: string;
-  readonly paymentDna: PaymentDna;
-  readonly risk: Severity;
-  readonly source: "demo" | "paypal_sandbox";
+  readonly email: string | null;
+  readonly country: string | null;
+  readonly segment: "repeat" | "new" | "at_risk" | "unattributed";
+  /** Present only when all normalized customer transactions use one currency. */
+  readonly relationshipValue: number | null;
+  readonly totalPayments: number;
+  /** Present only when all normalized customer transactions use one currency. */
+  readonly totalValue: number | null;
+  readonly primaryCurrency: string | null;
+  readonly valueByCurrency: Readonly<Record<string, number>>;
+  readonly firstSeenAt: string | null;
+  readonly lastPaymentAt: string | null;
+  readonly paymentDna?: PaymentDna;
+  readonly risk?: Severity;
+  readonly source: DataSource;
 }
 
 export interface IntelligenceSignal {
@@ -64,7 +91,7 @@ export interface IntelligenceSignal {
   readonly impact: string;
   readonly requiredAction: string;
   readonly affectedCustomerIds: readonly string[];
-  readonly source: "demo" | "paypal_sandbox";
+  readonly source: DataSource;
 }
 
 export type ActionStatus =
@@ -97,7 +124,7 @@ export interface ActionRecommendation {
   readonly risk: string;
   readonly confidence: number;
   readonly requiresApproval: true;
-  readonly source: "demo" | "paypal_sandbox";
+  readonly source: DataSource;
 }
 
 export interface ActionPlan {
@@ -106,7 +133,7 @@ export interface ActionPlan {
   readonly status: ActionStatus;
   readonly actionIds: readonly string[];
   readonly summary: string;
-  readonly source: "demo" | "paypal_sandbox";
+  readonly source: DataSource;
 }
 
 export interface ActionEvent {
@@ -120,20 +147,30 @@ export interface ActionEvent {
   readonly source: "demo";
 }
 
+export interface DashboardMetrics {
+  readonly transactionCount: number;
+  readonly successfulPaymentCount: number;
+  readonly pendingCount: number;
+  readonly failedCount: number;
+  readonly totalTransactionValue: number | null;
+  readonly averageTransactionValue: number | null;
+  readonly primaryCurrency: string | null;
+  readonly transactionValueByCurrency: Readonly<Record<string, number>>;
+  readonly customerCount: number;
+  readonly recentPaymentActivity: number;
+  readonly currencies: readonly string[];
+  readonly revenueChangePercent: number | null;
+}
+
 export interface DashboardSnapshot {
-  readonly source: "demo";
+  readonly source: DataSource;
+  readonly environment: DataEnvironment;
   readonly generatedAt: string;
   readonly coreState: CoreState;
-  readonly metrics: {
-    readonly revenue: number;
-    readonly revenueChangePercent: number;
-    readonly paymentVolume: number;
-    readonly activeCustomers: number;
-    readonly riskSignals: number;
-  };
+  readonly metrics: DashboardMetrics;
   readonly customers: readonly Customer[];
   readonly transactions: readonly Transaction[];
   readonly signals: readonly IntelligenceSignal[];
-  readonly actionPlan: ActionPlan;
+  readonly actionPlan: ActionPlan | null;
   readonly actions: readonly ActionRecommendation[];
 }

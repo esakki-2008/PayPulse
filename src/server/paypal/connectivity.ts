@@ -1,13 +1,13 @@
 import {
   PAYPAL_SANDBOX_API_BASE_URL,
   PayPalConfigurationError,
-} from "./config.js";
+} from "./config";
 import {
   PayPalOAuthTokenService,
   PayPalTokenRequestError,
   type PayPalAccessTokenMetadata,
-} from "./token-service.js";
-import { assertServerRuntime } from "../runtime.js";
+} from "./token-service";
+import { assertServerRuntime } from "../runtime";
 
 assertServerRuntime("PayPal Sandbox connectivity verification");
 

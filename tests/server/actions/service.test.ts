@@ -5,6 +5,7 @@ import {
   approveAction,
   assertActionIsApprovedForFutureExecution,
   requireDemoMerchantOperator,
+  requireExplicitDemoSource,
 } from "../../../src/server/actions/service.js";
 import { getDemoRepository } from "../../../src/server/database/demo-store.js";
 
@@ -38,6 +39,15 @@ describe("Phase 3 action approval boundary", () => {
       toStatus: "approved",
       actorId: "demo-merchant-operator",
     });
+  });
+
+  it("rejects any mutation request that did not explicitly select demo data", () => {
+    expect(() =>
+      requireExplicitDemoSource(new Request("https://paypulse.test/api/actions")),
+    ).toThrow(ActionStateError);
+    expect(() =>
+      requireExplicitDemoSource(new Request("https://paypulse.test/api/actions?source=demo")),
+    ).not.toThrow();
   });
 
   it("rejects a viewer role before any action state can change", () => {

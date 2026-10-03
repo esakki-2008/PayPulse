@@ -2,7 +2,7 @@ import { env as processEnv } from "node:process";
 
 import { z } from "zod";
 
-import { assertServerRuntime } from "../runtime.js";
+import { assertServerRuntime } from "../runtime";
 
 assertServerRuntime("PayPal Sandbox configuration");
 

@@ -7,13 +7,15 @@ import type {
 } from "@/types/domain";
 
 /**
- * PostgreSQL-ready port. Phase 3 uses its in-memory demo implementation only;
- * no customer or PayPal data is written until a later phase provisions storage.
+ * Storage port shared by demo, in-memory Sandbox, and PostgreSQL adapters.
+ * Phase 4 only writes normalized merchant, customer, and transaction records.
  */
 export interface PaymentIntelligenceRepository {
   listCustomers(): Promise<readonly Customer[]>;
   getCustomer(customerId: string): Promise<Customer | null>;
+  upsertCustomers(customers: readonly Customer[]): Promise<void>;
   listTransactions(): Promise<readonly Transaction[]>;
+  upsertTransactions(transactions: readonly Transaction[]): Promise<void>;
   listSignals(): Promise<readonly IntelligenceSignal[]>;
   listActions(): Promise<readonly ActionRecommendation[]>;
   getAction(actionId: string): Promise<ActionRecommendation | null>;

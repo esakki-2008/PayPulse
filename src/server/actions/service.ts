@@ -30,6 +30,14 @@ const permittedApprovalRoles: readonly DemoMerchantActor["role"][] = [
  * demo boundary explicit and keeps all mutation code ready to swap to a real
  * authenticated merchant session before any real action integration exists.
  */
+export function requireExplicitDemoSource(request: Request): void {
+  if (new URL(request.url).searchParams.get("source") !== "demo") {
+    throw new ActionStateError(
+      "Action mutations are available only in explicitly selected Demo Data mode during Phase 4.",
+    );
+  }
+}
+
 export function requireDemoMerchantOperator(request: Request): DemoMerchantActor {
   const role = request.headers.get("x-paypulse-demo-role");
 

@@ -3,8 +3,8 @@ import { Buffer } from "node:buffer";
 import {
   getPayPalSandboxConfig,
   type PayPalSandboxConfig,
-} from "./config.js";
-import { assertServerRuntime } from "../runtime.js";
+} from "./config";
+import { assertServerRuntime } from "../runtime";
 
 assertServerRuntime("PayPal OAuth token service");
 

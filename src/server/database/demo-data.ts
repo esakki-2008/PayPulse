@@ -10,7 +10,7 @@ import type {
  * Intentionally synthetic Phase 3 data. It powers the UI without claiming to be
  * PayPal Sandbox history or a real merchant ledger.
  */
-export const demoCustomers: readonly Customer[] = [
+const demoCustomerSeed = [
   {
     id: "cust_alex",
     name: "Alex Morgan",
@@ -153,7 +153,21 @@ export const demoCustomers: readonly Customer[] = [
   },
 ] as const;
 
-export const demoTransactions: readonly Transaction[] = [
+export const demoCustomers: readonly Customer[] = demoCustomerSeed.map((customer, index) => ({
+  ...customer,
+  paypalCustomerId: null,
+  payerReference: null,
+  displayName: customer.name,
+  email: null,
+  country: null,
+  totalPayments: index === 0 ? 9 : index === 1 ? 7 : index === 2 ? 8 : index === 3 ? 5 : 3,
+  totalValue: customer.relationshipValue,
+  primaryCurrency: "USD",
+  valueByCurrency: { USD: customer.relationshipValue },
+  firstSeenAt: "2026-05-01T09:00:00.000Z",
+}));
+
+const demoTransactionSeed = [
   {
     id: "txn_demo_1042",
     customerId: "cust_mateo",
@@ -210,6 +224,17 @@ export const demoTransactions: readonly Transaction[] = [
     aiInterpretation: "A recent failed payment makes respectful merchant follow-up timely.",
   },
 ] as const;
+
+export const demoTransactions: readonly Transaction[] = demoTransactionSeed.map((transaction) => ({
+  ...transaction,
+  paypalTransactionId: null,
+  paypalOrderId: null,
+  paymentMethod: null,
+  payerReference: null,
+  rawReference: null,
+  createdAt: transaction.occurredAt,
+  updatedAt: transaction.occurredAt,
+}));
 
 export const demoSignals: readonly IntelligenceSignal[] = [
   {

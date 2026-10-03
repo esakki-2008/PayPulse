@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { IntelligenceCore } from "@/components/3d/intelligence-core";
+import { DataSourceSwitch } from "@/components/ui/data-source-switch";
 import { Panel } from "@/components/ui/panel";
 import { StatusPill } from "@/components/ui/status-pill";
 import { formatCurrency, formatPercent, titleCase } from "@/lib/format";
@@ -43,7 +44,7 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
   const coreState = useMemo<CoreState>(() => {
     if (actions.some((action) => action.status === "awaiting_approval")) return "awaiting_approval";
     if (actions.some((action) => action.status === "approved")) return "approved";
-    return "analyzing";
+    return snapshot.coreState;
   }, [actions]);
 
   async function approveSelectedAction(): Promise<void> {
@@ -55,7 +56,7 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
     setFeedback("");
 
     try {
-      const response = await fetch(`/api/actions/${selectedAction.id}/approve`, {
+      const response = await fetch(`/api/actions/${selectedAction.id}/approve?source=demo`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -92,16 +93,13 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
             PayPulse intelligence online
           </div>
           <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">
-            Payments, understood <span className="text-cyan-200">before</span> they become problems.
+            {snapshot.source === "demo" ? <>Payments, understood <span className="text-cyan-200">before</span> they become problems.</> : <>Sandbox payments, <span className="text-violet-200">normalized</span> for clarity.</>}
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400">
-            Revenue is down 18% this week. The agent found 7 customer payment patterns that need a human decision.
+            {snapshot.source === "demo" ? "Revenue is down 18% this week. The agent found 7 customer payment patterns that need a human decision." : `${snapshot.metrics.transactionCount} PayPal Sandbox transactions are represented in the payment universe. Payment DNA and AI intelligence are intentionally preparing in later phases.`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusPill status="demo" />
-          <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400">Synthetic intelligence data</span>
-        </div>
+        <DataSourceSwitch source={snapshot.source} sandboxConnected={snapshot.source === "paypal_sandbox"} />
       </section>
 
       <MetricRail snapshot={snapshot} />
@@ -132,7 +130,7 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
 
         <div className="space-y-5">
           <AiSignal signal={snapshot.signals[0]} />
-          <SystemStatus coreState={coreState} />
+          <SystemStatus coreState={coreState} source={snapshot.source} />
         </div>
       </section>
 
@@ -153,12 +151,29 @@ export function CommandCenter({ snapshot }: { readonly snapshot: DashboardSnapsh
   );
 }
 
+function formatCurrencyBreakdown(values: Readonly<Record<string, number>>): string {
+  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) return "—";
+  return entries.map(([currency, value]) => formatCurrency(value, currency)).join(" · ");
+}
+
 function MetricRail({ snapshot }: { readonly snapshot: DashboardSnapshot }) {
+  const currency = snapshot.metrics.primaryCurrency;
+  const transactionValue =
+    currency && snapshot.metrics.totalTransactionValue !== null
+      ? formatCurrency(snapshot.metrics.totalTransactionValue, currency)
+      : formatCurrencyBreakdown(snapshot.metrics.transactionValueByCurrency);
+  const transactionValueDelta =
+    snapshot.metrics.currencies.length > 1
+      ? "Per-currency totals; no FX conversion"
+      : snapshot.metrics.revenueChangePercent === null
+        ? "actual Sandbox total"
+        : formatPercent(snapshot.metrics.revenueChangePercent);
   const metrics = [
-    { label: "Revenue pulse", value: formatCurrency(snapshot.metrics.revenue), delta: formatPercent(snapshot.metrics.revenueChangePercent), down: true, icon: ArrowDownRight },
-    { label: "Payment volume", value: String(snapshot.metrics.paymentVolume), delta: "steady", down: false, icon: Zap },
-    { label: "Active customers", value: String(snapshot.metrics.activeCustomers), delta: "7 changed", down: false, icon: ArrowUpRight },
-    { label: "Risk signals", value: String(snapshot.metrics.riskSignals), delta: "review", down: true, icon: CircleAlert },
+    { label: "Transaction value", value: transactionValue, delta: transactionValueDelta, down: (snapshot.metrics.revenueChangePercent ?? 0) < 0, icon: ArrowDownRight },
+    { label: "Transaction count", value: String(snapshot.metrics.transactionCount), delta: `${snapshot.metrics.successfulPaymentCount} completed`, down: false, icon: Zap },
+    { label: "Customers", value: String(snapshot.metrics.customerCount), delta: `${snapshot.metrics.recentPaymentActivity} recent`, down: false, icon: ArrowUpRight },
+    { label: "Status signals", value: String(snapshot.metrics.failedCount + snapshot.metrics.pendingCount), delta: `${snapshot.metrics.pendingCount} pending`, down: snapshot.metrics.failedCount > 0, icon: CircleAlert },
   ];
 
   return (
@@ -204,7 +219,7 @@ function AiSignal({ signal }: { readonly signal: IntelligenceSignal | undefined 
   );
 }
 
-function SystemStatus({ coreState }: { readonly coreState: CoreState }) {
+function SystemStatus({ coreState, source }: { readonly coreState: CoreState; readonly source: DashboardSnapshot["source"] }) {
   return (
     <Panel className="p-5">
       <div className="flex items-center justify-between">
@@ -215,8 +230,8 @@ function SystemStatus({ coreState }: { readonly coreState: CoreState }) {
       </div>
       <div className="mt-5 space-y-3 text-xs">
         <SystemLine label="Intelligence core" value={titleCase(coreState)} live />
-        <SystemLine label="Data mode" value="Demo intelligence" />
-        <SystemLine label="PayPal execution" value="Disabled in Phase 3" />
+        <SystemLine label="Data mode" value={source === "paypal_sandbox" ? "PayPal Sandbox" : "Explicit demo data"} />
+        <SystemLine label="PayPal execution" value="Disabled until Phase 8+" />
       </div>
     </Panel>
   );
@@ -261,7 +276,7 @@ function ActionPlanPanel({
             <CircleDashed size={14} aria-hidden="true" /> Agentic action plan
           </div>
           <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-[-0.04em] text-white">Review before the system acts.</h2>
-          <p className="mt-2 text-sm text-slate-400">6 reminder drafts • 2 retention opportunities • 1 anomaly review</p>
+          <p className="mt-2 text-sm text-slate-400">{actions.length > 0 ? "6 reminder drafts • 2 retention opportunities • 1 anomaly review" : "No action recommendations are generated from PayPal Sandbox data in Phase 4."}</p>
         </div>
         <StatusPill status="awaiting_approval" />
       </div>
@@ -334,7 +349,11 @@ function ActionPlanPanel({
               ) : null}
             </AnimatePresence>
           </div>
-        ) : null}
+        ) : (
+          <div className="grid min-h-[320px] place-items-center p-8 text-center">
+            <div><ShieldCheck className="mx-auto text-violet-200" size={24} /><p className="mt-4 text-sm font-medium text-slate-200">Human approval is ready for a future action plan.</p><p className="mt-2 max-w-sm text-xs leading-5 text-slate-500">Phase 4 reads and normalizes PayPal Sandbox data only. It does not generate AI recommendations or execute actions.</p></div>
+          </div>
+        )}
       </div>
     </Panel>
   );

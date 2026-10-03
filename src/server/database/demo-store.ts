@@ -31,8 +31,16 @@ class DemoPaymentIntelligenceRepository implements PaymentIntelligenceRepository
     return demoCustomers.find((customer) => customer.id === customerId) ?? null;
   }
 
+  async upsertCustomers(): Promise<void> {
+    throw new Error("Demo repository is read-only for normalized Sandbox records.");
+  }
+
   async listTransactions(): Promise<readonly Transaction[]> {
     return demoTransactions;
+  }
+
+  async upsertTransactions(): Promise<void> {
+    throw new Error("Demo repository is read-only for normalized Sandbox records.");
   }
 
   async listSignals(): Promise<readonly IntelligenceSignal[]> {

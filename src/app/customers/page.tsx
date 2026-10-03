@@ -1,7 +1,25 @@
 import { CustomerNetwork } from "@/components/customers/customer-network";
-import { getDemoRepository } from "@/server/database/demo-store";
+import { DataSourceUnavailable } from "@/components/ui/data-source-unavailable";
+import {
+  DataSourceError,
+  getCustomersForSource,
+} from "@/server/data/provider";
+import { dataSourceFromSearchParams } from "@/server/data/page-source";
 
-export default async function CustomersPage() {
-  const customers = await getDemoRepository().listCustomers();
-  return <CustomerNetwork customers={customers} />;
+interface CustomersPageProps {
+  readonly searchParams: Promise<{ source?: string | string[] }>;
+}
+
+export default async function CustomersPage({ searchParams }: CustomersPageProps) {
+  const source = await dataSourceFromSearchParams(searchParams);
+
+  try {
+    const result = await getCustomersForSource(source);
+    return <CustomerNetwork customers={result.data} source={result.source} />;
+  } catch (error) {
+    if (error instanceof DataSourceError) {
+      return <DataSourceUnavailable message={error.message} category={error.category} path="/customers" />;
+    }
+    throw error;
+  }
 }

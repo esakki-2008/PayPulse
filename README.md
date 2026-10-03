@@ -4,11 +4,13 @@
 
 PayPulse is an AI Payment Intelligence & Action Agent for the PayPal AI Hackathon. It turns merchant payment behavior into explainable **Payment DNA**, prioritizes meaningful change, and prepares human-approved next actions.
 
-## Current status — Phase 3 foundation
+## Current status — Phase 4 PayPal Sandbox data integration
 
-The working Phase 3 experience is an immersive, responsive command center with a 3D Payment Intelligence Core, Payment Universe, customer Payment DNA views, explainable intelligence signals, and an approval-gated Action Center.
+The primary experience remains the immersive 3D Command Center. When server-side Sandbox credentials and Transaction Search reporting access are configured, its default source is normalized, read-only **PayPal Sandbox** transaction data. Payment Universe and Customer Intelligence show only returned transaction/payer facts, including explicit `paypal_sandbox` provenance.
 
-All UI payment intelligence is clearly marked as **synthetic demo data**. PayPal Sandbox OAuth is server-only and independently verifiable, but Phase 3 does not query transaction APIs, create orders, or execute any financial action.
+A visible source selector distinguishes **PayPal Sandbox** from the retained **Demo Data** prototype. Demo data is never silently mixed with or substituted for Sandbox data: it requires an explicit selection. Sandbox access/configuration/provider failures display a safe unavailable state, and an empty reporting period stays empty.
+
+Phase 4 uses only the documented read-only Transaction Search endpoint. It does not create orders, capture/refund/move money, invoke PayPal actions, produce Payment DNA, or generate AI financial decisions. Payment DNA is explicitly marked as **Preparing Payment DNA** for Sandbox records.
 
 ### Run the command center
 
@@ -33,6 +35,7 @@ PayPulse is designed for **PayPal Sandbox only** during development and demonstr
 - **[Phase 2 PayPal Sandbox local setup](docs/PAYPAL_SANDBOX_LOCAL_SETUP.md)**
 - **[Phase 2 OAuth connectivity verification](docs/PAYPAL_SANDBOX_CONNECTIVITY.md)**
 - **[Phase 3 Command Center](docs/phases/PHASE_3_COMMAND_CENTER.md)**
+- **[Phase 4 PayPal Sandbox data integration](docs/phases/PHASE_4_PAYPAL_DATA_INTEGRATION.md)**
 
 ## Product loop
 

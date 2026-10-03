@@ -1,7 +1,25 @@
 import { CommandCenter } from "@/components/command-center/command-center";
-import { getDashboardSnapshot } from "@/server/dashboard/service";
+import { DataSourceUnavailable } from "@/components/ui/data-source-unavailable";
+import {
+  DataSourceError,
+  getDashboardForSource,
+} from "@/server/data/provider";
+import { dataSourceFromSearchParams } from "@/server/data/page-source";
 
-export default async function CommandPage() {
-  const snapshot = await getDashboardSnapshot();
-  return <CommandCenter snapshot={snapshot} />;
+interface CommandPageProps {
+  readonly searchParams: Promise<{ source?: string | string[] }>;
+}
+
+export default async function CommandPage({ searchParams }: CommandPageProps) {
+  const source = await dataSourceFromSearchParams(searchParams);
+
+  try {
+    const result = await getDashboardForSource(source);
+    return <CommandCenter snapshot={result.data} />;
+  } catch (error) {
+    if (error instanceof DataSourceError) {
+      return <DataSourceUnavailable message={error.message} category={error.category} path="/" />;
+    }
+    throw error;
+  }
 }

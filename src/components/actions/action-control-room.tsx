@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { CheckCircle2, LockKeyhole, Play, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 
+import { DataSourceSwitch } from "@/components/ui/data-source-switch";
 import { Panel } from "@/components/ui/panel";
 import { StatusPill } from "@/components/ui/status-pill";
 import { titleCase } from "@/lib/format";
@@ -20,14 +21,20 @@ const actionStages: readonly ActionStatus[] = [
   "learned",
 ];
 
-export function ActionControlRoom({ initialActions }: { readonly initialActions: readonly ActionRecommendation[] }) {
+export function ActionControlRoom({
+  initialActions,
+  source,
+}: {
+  readonly initialActions: readonly ActionRecommendation[];
+  readonly source: "demo" | "paypal_sandbox";
+}) {
   const [actions, setActions] = useState(initialActions);
   const [message, setMessage] = useState("Human approval is required before any future execution.");
   const reduceMotion = useReducedMotion();
 
   async function approve(action: ActionRecommendation): Promise<void> {
     if (!["recommended", "awaiting_approval"].includes(action.status)) return;
-    const response = await fetch(`/api/actions/${action.id}/approve`, { method: "POST", headers: { "Content-Type": "application/json", "x-paypulse-demo-role": "merchant_operator" }, body: JSON.stringify({ version: action.version }) });
+    const response = await fetch(`/api/actions/${action.id}/approve?source=demo`, { method: "POST", headers: { "Content-Type": "application/json", "x-paypulse-demo-role": "merchant_operator" }, body: JSON.stringify({ version: action.version }) });
     const payload = (await response.json()) as { data?: ActionRecommendation; error?: string };
     if (!response.ok || !payload.data) {
       setMessage(payload.error ?? "Approval could not be recorded.");
@@ -38,16 +45,16 @@ export function ActionControlRoom({ initialActions }: { readonly initialActions:
   }
 
   async function attemptExecution(action: ActionRecommendation): Promise<void> {
-    const response = await fetch(`/api/actions/${action.id}/execute`, { method: "POST", headers: { "Content-Type": "application/json", "x-paypulse-demo-role": "merchant_operator" }, body: JSON.stringify({ version: action.version }) });
+    const response = await fetch(`/api/actions/${action.id}/execute?source=demo`, { method: "POST", headers: { "Content-Type": "application/json", "x-paypulse-demo-role": "merchant_operator" }, body: JSON.stringify({ version: action.version }) });
     const payload = (await response.json()) as { error?: string };
     setMessage(payload.error ?? "No execution occurred.");
   }
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.19em] text-cyan-200">Action center</p><h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-white">The agentic control room.</h1><p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">Every recommendation is visible, explainable, versioned, and blocked from execution until a merchant explicitly approves it.</p></div><StatusPill status="demo" /></section>
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.19em] text-cyan-200">Action center</p><h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-white">The agentic control room.</h1><p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">{source === "paypal_sandbox" ? "Phase 4 reads PayPal Sandbox data only. Recommendations and financial execution remain disabled." : "Every recommendation is visible, explainable, versioned, and blocked from execution until a merchant explicitly approves it."}</p></div><DataSourceSwitch source={source} sandboxConnected={source === "paypal_sandbox"} /></section>
       <Panel className="border-amber-300/15 bg-[linear-gradient(130deg,rgba(120,53,15,0.1),rgba(8,15,32,0.6))] p-4"><div className="flex gap-3"><LockKeyhole size={18} className="mt-0.5 shrink-0 text-amber-100" /><div><p className="text-sm font-medium text-amber-100">Financial execution is deliberately unavailable.</p><p className="mt-1 text-xs leading-5 text-slate-400">This Phase 3 interface records demo approval state only. It does not create PayPal orders, contact customers, or move money.</p></div></div></Panel>
-      <section className="space-y-4">{actions.map((action, index) => <ActionCard key={action.id} action={action} index={index} onApprove={approve} onExecute={attemptExecution} reduceMotion={Boolean(reduceMotion)} />)}</section>
+      {actions.length > 0 ? <section className="space-y-4">{actions.map((action, index) => <ActionCard key={action.id} action={action} index={index} onApprove={approve} onExecute={attemptExecution} reduceMotion={Boolean(reduceMotion)} />)}</section> : <Panel className="grid min-h-[300px] place-items-center p-8 text-center"><div><ShieldAlert className="mx-auto text-violet-200" size={28} /><h2 className="mt-4 text-xl font-semibold text-white">No action plan generated</h2><p className="mt-3 max-w-md text-sm leading-6 text-slate-400">PayPal Sandbox records are displayed with provenance in Phase 4. AI recommendations and action plans are intentionally deferred to later phases.</p></div></Panel>}
       <p className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.05] p-4 text-sm text-cyan-50" role="status">{message}</p>
     </div>
   );

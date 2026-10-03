@@ -1,12 +1,13 @@
 import { demoActionPlan } from "../database/demo-data";
 import { getDemoRepository } from "../database/demo-store";
+import { calculateDashboardMetrics } from "./metrics";
 import type { DashboardSnapshot } from "@/types/domain";
 
 /**
- * Phase 3 command-center projection. Data is explicitly synthetic until the
- * PayPal transaction adapter and PostgreSQL implementation arrive in later phases.
+ * Explicit demo projection for Phase 3/4 visual development. It is used only
+ * when the caller explicitly selects `source=demo`.
  */
-export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
+export async function getDemoDashboardSnapshot(): Promise<DashboardSnapshot> {
   const repository = getDemoRepository();
   const [customers, transactions, signals, actions] = await Promise.all([
     repository.listCustomers(),
@@ -14,23 +15,19 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     repository.listSignals(),
     repository.listActions(),
   ]);
-
+  const metrics = calculateDashboardMetrics(transactions, customers);
   const hasAwaitingApproval = actions.some(
     (action) => action.status === "awaiting_approval",
   );
 
   return {
     source: "demo",
+    environment: "demo",
     generatedAt: "2026-10-03T10:00:00.000Z",
     coreState: hasAwaitingApproval ? "awaiting_approval" : "analyzing",
     metrics: {
-      revenue: 12840,
+      ...metrics,
       revenueChangePercent: -18,
-      paymentVolume: 94,
-      activeCustomers: customers.length,
-      riskSignals: signals.filter(
-        (signal) => signal.severity === "high" || signal.severity === "critical",
-      ).length,
     },
     customers,
     transactions,
