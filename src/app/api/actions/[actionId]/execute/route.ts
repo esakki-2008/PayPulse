@@ -28,15 +28,18 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       actionId,
       version: inputSchema.parse(body).version,
     });
-    const learning = await materializeOutcomeFromExecution({
+    const learning = result.learning ?? await materializeOutcomeFromExecution({
       source,
       executionId: result.outcome.executionId,
     });
     return Response.json({
       data: {
         execution: result.outcome,
+        action: result.action,
         outcome: learning.outcome,
         learning: learning.event,
+        approvalUrl: result.approvalUrl,
+        buyerApprovalRequired: result.buyerApprovalRequired,
         executionOccurred: result.executionOccurred,
         idempotent: result.idempotent,
       },
@@ -51,7 +54,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       return Response.json({
         error: error.message,
         executionOccurred: false,
-        meta: { source: "demo", environment: "demo", category: "capability" },
+        meta: { source: "paypal_sandbox", environment: "sandbox", category: "capability" },
       }, { status: error.status });
     }
     return apiErrorResponse(error);

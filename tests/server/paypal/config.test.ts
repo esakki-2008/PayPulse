@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getPayPalSandboxConfig,
+  getPayPalSandboxOrderConfig,
   PAYPAL_SANDBOX_API_BASE_URL,
   PayPalConfigurationError,
 } from "../../../src/server/paypal/config.js";
@@ -19,6 +20,18 @@ describe("getPayPalSandboxConfig", () => {
     expect(config.environment).toBe("sandbox");
     expect(config.apiBaseUrl).toBe(PAYPAL_SANDBOX_API_BASE_URL);
     expect(config.apiBaseUrl).toBe("https://api-m.sandbox.paypal.com");
+  });
+
+  it("loads only a fixed server-side Sandbox checkout configuration", () => {
+    const config = getPayPalSandboxOrderConfig({
+      ...sandboxEnvironment,
+      PAYPAL_SANDBOX_ORDER_AMOUNT: "1.25",
+      PAYPAL_SANDBOX_ORDER_CURRENCY: "USD",
+      PAYPAL_SANDBOX_RETURN_URL: "http://localhost:3000/paypal/return",
+      PAYPAL_SANDBOX_CANCEL_URL: "http://localhost:3000/paypal/cancel",
+    });
+    expect(config).toMatchObject({ amount: "1.25", currency: "USD", environment: "sandbox" });
+    expect(() => getPayPalSandboxOrderConfig(sandboxEnvironment)).toThrow(PayPalConfigurationError);
   });
 
   it("rejects a missing required variable without echoing its value", () => {

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { getIntelligenceForSource } from "../data/provider";
+import { getPayPalSandboxOrderConfig } from "../paypal/config";
 import { buildActionCandidates } from "./rules";
 import { getAgentActionRepository, type AgentActionRepository } from "./repository";
 import type {
@@ -57,6 +58,73 @@ export async function generateActionsFromIntelligence(
     actions.push(stored);
   }
   return { actions, message: null };
+}
+
+/**
+ * Creates an explicit, merchant-reviewed Sandbox checkout verification action.
+ * It has no customer or transaction target and is never generated from
+ * intelligence. Checkout amount/currency are fixed server configuration, not
+ * browser input; this action exists solely to prove the real Sandbox flow.
+ */
+export async function createPayPalSandboxVerificationAction(
+  repository: AgentActionRepository = getAgentActionRepository(),
+  now = new Date(),
+): Promise<ActionCandidate> {
+  const config = getPayPalSandboxOrderConfig();
+  const fingerprint = createHash("sha256").update(JSON.stringify({
+    namespace: "paypulse.paypal-sandbox-verification-action.v1",
+    source: "paypal_sandbox",
+    amount: config.amount,
+    currency: config.currency,
+    returnUrl: config.returnUrl,
+    cancelUrl: config.cancelUrl,
+  })).digest("hex");
+  const existing = await repository.findActiveActionByFingerprint("paypal_sandbox", fingerprint);
+  if (existing) return existing;
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString();
+  const action: ActionCandidate = {
+    id: `action_sandbox_payment_${fingerprint.slice(0, 20)}`,
+    fingerprint,
+    version: 1,
+    type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION",
+    title: "Verify a PayPal Sandbox payment flow",
+    summary: "Creates one fixed server-configured Sandbox order after approval. It does not contact or charge an observed customer.",
+    reason: "Explicit merchant request to verify the PayPal Sandbox checkout integration.",
+    severity: "low",
+    confidence: 1,
+    source: "paypal_sandbox",
+    customerIds: [],
+    transactionIds: [],
+    evidence: [{
+      type: "insight",
+      field: "sandbox_checkout_configuration",
+      value: "Server-side fixed Sandbox verification checkout is configured; no real-money payment is implied.",
+      transactionIds: [],
+    }],
+    whatWillHappen: "After merchant approval, PayPulse creates one PayPal Sandbox order and asks a Sandbox buyer to approve it before server-side capture verification.",
+    expectedImpact: "Verifies an integration path only. No customer behavior, revenue, or payment history is predicted or claimed.",
+    limitations: [
+      "Sandbox payment — no real money.",
+      "A Sandbox buyer approval step is required before capture.",
+      "This is a known PayPulse-created order lookup, not Transaction Search or merchant-wide reporting.",
+    ],
+    createdAt,
+    expiresAt,
+    status: "proposed",
+  };
+  const stored = await repository.saveAction(action);
+  await repository.appendEvent({
+    id: randomUUID(),
+    actionId: stored.id,
+    previousStatus: "proposed",
+    newStatus: "proposed",
+    actor: "merchant",
+    timestamp: createdAt,
+    reason: "Merchant requested an explicit PayPal Sandbox payment verification workflow.",
+    source: "paypal_sandbox",
+  });
+  return stored;
 }
 
 export async function generateActionPlanForSource(

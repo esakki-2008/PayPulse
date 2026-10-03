@@ -264,7 +264,9 @@ export type AgentActionType =
   | "RETENTION_REVIEW"
   | "PAYMENT_ANOMALY_REVIEW"
   | "REVENUE_REVIEW"
-  | "CUSTOMER_FOLLOWUP";
+  | "CUSTOMER_FOLLOWUP"
+  /** Explicit merchant-created test action; never generated from customer data. */
+  | "PAYPAL_SANDBOX_PAYMENT_VERIFICATION";
 
 export type AgentActionStatus =
   | "proposed"

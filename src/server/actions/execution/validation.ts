@@ -14,11 +14,6 @@ export class ActionExecutionValidationError extends Error {
 
 export interface ValidatedExecutionRequest {
   readonly action: ActionCandidate;
-  /**
-   * Always null in Phase 7. Transaction reporting IDs are not assumed to be
-   * Order IDs, and a review/reminder action is not proof of buyer approval.
-   */
-  readonly paypalOrderId: null;
 }
 
 /**
@@ -83,17 +78,8 @@ export function validateExecutionRequest({
     );
   }
 
-  // There is intentionally no fallback from transactionIds to an Order ID. The
-  // Transaction Search API does not establish that a resource is an un-captured,
-  // buyer-approved Order eligible for Orders v2 capture.
-  return { action, paypalOrderId: null };
-}
-
-export function requireVerifiedPayPalOrderId(request: ValidatedExecutionRequest): string {
-  if (request.paypalOrderId) return request.paypalOrderId;
-  throw new ActionExecutionValidationError(
-    "No verified buyer-approved PayPal Order ID is bound to this action; no PayPal operation was attempted.",
-    "capability",
-    503,
-  );
+  // Transaction Search IDs are never reinterpreted as Orders v2 resources.
+  // The executor creates and persists a fresh server-derived verification order
+  // only for the dedicated explicit Sandbox verification action.
+  return { action };
 }

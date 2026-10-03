@@ -129,14 +129,14 @@ describe("Phase 8 verified outcome learning", () => {
     await recordVerifiedProviderOutcome({
       actionId: action.id, actionFingerprint: action.fingerprint, actionVersion: action.version,
       source: "paypal_sandbox", provider: "paypal_sandbox", providerReference: "ORDER-PHASE8", status: "succeeded",
-      customerId: "customer-phase8", paymentId: "PAYMENT-PHASE8", verifiedFacts: [fact()], failureCategory: null, limitations: [], executionId: "execution-phase8", timestamp: "2026-10-02T12:00:00.000Z",
+      customerId: "customer-phase8", paymentId: "PAYMENT-PHASE8", verifiedFacts: [fact(), confirmation()], failureCategory: null, limitations: [], executionId: "execution-phase8", timestamp: "2026-10-02T12:00:00.000Z",
     }, dependencies);
     await dependencies.executionRepository.save({ ...successfulExecution(), executionId: "execution-phase8-second", paypalReference: "ORDER-PHASE8-SECOND", idempotencyKey: "execution-key-phase8-second" });
     const secondPayment = { ...fact(), providerReference: "ORDER-PHASE8-SECOND", observedAt: "2026-10-03T08:00:00.000Z", payment: { ...fact().payment!, paymentId: "PAYMENT-PHASE8-SECOND", occurredAt: "2026-10-03T08:00:00.000Z", amount: 21, currency: "EUR" } };
     const second = await recordVerifiedProviderOutcome({
       actionId: action.id, actionFingerprint: action.fingerprint, actionVersion: action.version,
       source: "paypal_sandbox", provider: "paypal_sandbox", providerReference: "ORDER-PHASE8-SECOND", status: "succeeded",
-      customerId: "customer-phase8", paymentId: "PAYMENT-PHASE8-SECOND", verifiedFacts: [secondPayment], failureCategory: null, limitations: [], executionId: "execution-phase8-second", timestamp: "2026-10-03T08:00:00.000Z",
+      customerId: "customer-phase8", paymentId: "PAYMENT-PHASE8-SECOND", verifiedFacts: [secondPayment, { ...confirmation(), providerReference: "ORDER-PHASE8-SECOND" }], failureCategory: null, limitations: [], executionId: "execution-phase8-second", timestamp: "2026-10-03T08:00:00.000Z",
     }, dependencies);
     expect(second.event.dnaDelta?.before.transactionCount).toBe(1);
     expect(second.event.dnaDelta?.after.transactionCount).toBe(2);
@@ -188,7 +188,7 @@ describe("Phase 8 verified outcome learning", () => {
     const demo = await recordVerifiedProviderOutcome({
       actionId: demoAction.id, actionFingerprint: demoAction.fingerprint, actionVersion: demoAction.version,
       source: "demo", provider: "demo", providerReference: "demo-ref", status: "succeeded",
-      customerId: "customer-phase8", paymentId: "demo-payment", verifiedFacts: [{ ...fact(), providerReference: "demo-ref", payment: { ...fact().payment!, paymentId: "demo-payment" } }],
+      customerId: "customer-phase8", paymentId: "demo-payment", verifiedFacts: [{ ...fact(), providerReference: "demo-ref", payment: { ...fact().payment!, paymentId: "demo-payment" } }, { ...confirmation(), providerReference: "demo-ref" }],
       failureCategory: null, limitations: [], timestamp: "2026-10-02T12:00:00.000Z",
     }, dependencies);
     expect(demo.outcome.correlation).toBe("unverified");

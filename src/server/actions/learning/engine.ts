@@ -116,8 +116,8 @@ export async function recordVerifiedProviderOutcome(
   if (input.provider !== input.source) {
     throw new OutcomeLearningValidationError("Outcome provider and source must remain isolated.");
   }
-  if (input.status === "succeeded" && !input.verifiedFacts.some((fact) => fact.type === "provider_confirmation" || fact.type === "payment_observed")) {
-    throw new OutcomeLearningValidationError("A succeeded outcome requires a verified provider fact.");
+  if (input.status === "succeeded" && (!input.providerReference || !input.verifiedFacts.some((fact) => fact.type === "provider_confirmation" && fact.providerReference === input.providerReference))) {
+    throw new OutcomeLearningValidationError("A succeeded outcome requires a matching verified provider confirmation.");
   }
   if (input.status === "succeeded" && input.failureCategory !== null) {
     throw new OutcomeLearningValidationError("A succeeded outcome cannot include a failure category.");
@@ -384,6 +384,7 @@ function toLearningSummary(profile: ReturnType<typeof calculatePaymentDna>): Pay
 function learningSummary(outcome: ActionOutcome, learningStatus: LearningEvent["learningStatus"]): string {
   if (outcome.status === "failed") return "Payment action failed. No financial success was recorded.";
   if (outcome.status === "succeeded" && learningStatus === "applied") return "Payment outcome observed. Payment DNA was recalculated from verified provider facts.";
+  if (outcome.status === "succeeded" && outcome.correlation === "verified") return "Verified provider outcome observed. No verified customer-linked monetary fact was available, so Payment DNA was unchanged.";
   if (outcome.status === "succeeded") return "Verified provider outcome recorded. Action-to-payment correlation remains unverified.";
   if (outcome.status === "pending") return "Payment action outcome is pending verification.";
   return "No verified provider outcome was available. Payment DNA was unchanged.";

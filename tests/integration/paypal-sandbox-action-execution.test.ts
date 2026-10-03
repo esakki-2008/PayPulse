@@ -1,24 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import { getPayPalSandboxExecutionCapability } from "../../src/server/actions/execution/capabilities.js";
+import { loadPayPalSandboxCliEnvironment } from "../../src/server/paypal/cli-environment.js";
 
-// This gate requires an explicitly designated Sandbox-only resource in addition
-// to credentials. It intentionally never captures, creates, refunds, or changes
-// that resource. Do not set this variable from production data.
-const hasExplicitSandboxExecutionFixture =
-  Boolean(process.env.PAYPAL_CLIENT_ID?.trim()) &&
-  Boolean(process.env.PAYPAL_CLIENT_SECRET?.trim()) &&
-  process.env.PAYPAL_ENVIRONMENT === "sandbox" &&
-  Boolean(process.env.PAYPAL_EXECUTION_TEST_ORDER_ID?.trim());
+loadPayPalSandboxCliEnvironment(process.cwd(), { includeLocalEnvironmentInTest: true });
 
-describe.skipIf(!hasExplicitSandboxExecutionFixture)("PayPal Sandbox execution capability gate", () => {
-  it("remains closed without a verified action-bound buyer-approved order contract", async () => {
-    const capability = await getPayPalSandboxExecutionCapability();
+const { getPayPalSandboxExecutionCapability } = await import("../../src/server/actions/execution/capabilities.js");
+
+const configuredSandboxCheckout =
+  Boolean(process.env.PAYPAL_CLIENT_ID?.trim())
+  && Boolean(process.env.PAYPAL_CLIENT_SECRET?.trim())
+  && process.env.PAYPAL_ENVIRONMENT === "sandbox"
+  && Boolean(process.env.PAYPAL_SANDBOX_ORDER_AMOUNT?.trim())
+  && Boolean(process.env.PAYPAL_SANDBOX_ORDER_CURRENCY?.trim())
+  && Boolean(process.env.PAYPAL_SANDBOX_RETURN_URL?.trim())
+  && Boolean(process.env.PAYPAL_SANDBOX_CANCEL_URL?.trim());
+
+describe("PayPal Sandbox execution capability gate", () => {
+  it("does not infer a write capability from OAuth credentials alone", () => {
+    const capability = getPayPalSandboxExecutionCapability();
     expect(capability).toMatchObject({
       provider: "paypal_sandbox",
       operation: "capture_order",
       endpoint: "https://api-m.sandbox.paypal.com/v2/checkout/orders/{id}/capture",
-      available: false,
     });
+    if (!configuredSandboxCheckout) expect(capability.available).toBe(false);
   });
 });

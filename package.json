@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:paypal-connectivity": "vitest run tests/integration/paypal-sandbox-connectivity.test.ts",
     "test:paypal-transaction-search": "vitest run tests/integration/paypal-sandbox-transaction-search.test.ts",
+    "test:paypal-order-flow": "vitest run tests/integration/paypal-sandbox-order-flow.test.ts",
     "verify:paypal-sandbox": "tsx scripts/verify-paypal-sandbox-connectivity.ts"
   },
   "dependencies": {

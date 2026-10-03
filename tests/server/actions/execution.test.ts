@@ -81,7 +81,7 @@ describe("Phase 7 PayPal Sandbox execution boundary", () => {
     const repository = readyRepository();
     const outcomes = new MemoryExecutionOutcomeRepository();
     const result = await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: repository, outcomeRepository: outcomes, now: new Date("2026-10-04T00:00:00.000Z") });
-    expect(result).toMatchObject({ executionOccurred: false, idempotent: false, status: 503, outcome: { status: "capability_unavailable", operation: "capability_check", failureCategory: "capability", paypalReference: null } });
+    expect(result).toMatchObject({ executionOccurred: false, idempotent: false, status: 503, outcome: { status: "capability_unavailable", operation: "capture_order", failureCategory: "capability", paypalReference: null } });
     expect(result.outcome.summary).toContain("No PayPal operation was attempted");
     expect((await repository.getAction("paypal_sandbox", action.id))?.status).toBe("ready_for_execution");
   });

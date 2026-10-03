@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { POST as executeAction } from "../../../src/app/api/actions/[actionId]/execute/route";
+import { POST as completeSandboxAction } from "../../../src/app/api/actions/[actionId]/execute/complete/route";
+import { POST as createSandboxAction } from "../../../src/app/api/actions/sandbox-verification/route";
 import {
   approveAgentAction,
+  createPayPalSandboxVerificationAction,
   generateActionPlanFromIntelligence,
   getActionForSource,
   markReadyForExecution,
@@ -48,6 +51,24 @@ describe("Phase 6 action engine", () => {
     expect(candidates).toEqual([]);
   });
 
+  it("creates a distinct, approval-required Sandbox verification action from fixed server configuration", async () => {
+    const keys = ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_ENVIRONMENT", "PAYPAL_SANDBOX_ORDER_AMOUNT", "PAYPAL_SANDBOX_ORDER_CURRENCY", "PAYPAL_SANDBOX_RETURN_URL", "PAYPAL_SANDBOX_CANCEL_URL"] as const;
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, { PAYPAL_CLIENT_ID: "test-client", PAYPAL_CLIENT_SECRET: "test-only-not-a-real-secret", PAYPAL_ENVIRONMENT: "sandbox", PAYPAL_SANDBOX_ORDER_AMOUNT: "1.00", PAYPAL_SANDBOX_ORDER_CURRENCY: "USD", PAYPAL_SANDBOX_RETURN_URL: "http://localhost:3000/return", PAYPAL_SANDBOX_CANCEL_URL: "http://localhost:3000/cancel" });
+    try {
+      const repository = new FakeActionRepository();
+      const action = await createPayPalSandboxVerificationAction(repository, new Date("2026-10-03T00:00:00.000Z"));
+      expect(action).toMatchObject({ type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION", source: "paypal_sandbox", status: "proposed", customerIds: [], transactionIds: [] });
+      expect(action.limitations.join(" ")).toContain("not Transaction Search");
+      expect((await createPayPalSandboxVerificationAction(repository, new Date("2026-10-03T00:01:00.000Z"))).id).toBe(action.id);
+    } finally {
+      for (const key of keys) {
+        const value = previous[key];
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+      }
+    }
+  });
+
   it("uses a deterministic source-aware fingerprint", () => {
     expect(fingerprintFor(insight, "RETENTION_REVIEW")).toBe(fingerprintFor(insight, "RETENTION_REVIEW"));
     expect(fingerprintFor({ ...insight, source: "demo" }, "RETENTION_REVIEW")).not.toBe(fingerprintFor(insight, "RETENTION_REVIEW"));
@@ -89,6 +110,18 @@ describe("Phase 6 action engine", () => {
     const expired = await getActionForSource("paypal_sandbox", action.id, repository);
     expect(expired?.status).toBe("expired");
     await expect(approveAgentAction("paypal_sandbox", action.id, expired?.version ?? 1, undefined, repository)).rejects.toThrow("Expired");
+  });
+
+  it("rejects browser-supplied financial and provider facts at Sandbox-only routes", async () => {
+    const create = await createSandboxAction(new Request("http://localhost/api/actions/sandbox-verification", { method: "POST", body: JSON.stringify({ amount: "999.00", currency: "USD", providerStatus: "COMPLETED" }) }));
+    expect(create.status).toBe(400);
+    await expect(create.json()).resolves.toMatchObject({ error: "Sandbox verification creation accepts no browser financial or provider facts." });
+    const complete = await completeSandboxAction(
+      new Request("http://localhost/api/actions/action-one/execute/complete", { method: "POST", body: JSON.stringify({ orderId: "browser-order", captureId: "browser-capture", status: "COMPLETED" }) }),
+      { params: Promise.resolve({ actionId: "action-one" }) },
+    );
+    expect(complete.status).toBe(400);
+    await expect(complete.json()).resolves.toMatchObject({ error: "Sandbox completion accepts no browser financial or provider facts." });
   });
 
   it("keeps Demo execution disabled and isolated from PayPal Sandbox", async () => {

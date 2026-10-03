@@ -23,7 +23,7 @@ It is deliberately **not** a generic payment dashboard, payment automation, or a
 | `failed` | A safe server-derived failure was recorded. It is learning/audit information, never a successful payment. |
 | `unknown` | An execution record exists but does not contain a verified provider payment/order fact. Capability-unavailable Phase 7 executions currently become `unknown`. |
 
-A request being created, an HTTP 2xx, a browser state transition, action approval, or AI text can never establish `succeeded`. Phase 7 currently does not issue a PayPal mutation, so its capability-unavailable execution records have no provider facts and cannot create financial metrics.
+A request being created, an HTTP 2xx, a browser state transition, action approval, buyer redirect, or AI text can never establish `succeeded`. Phase 9 adds a narrow explicit Sandbox verification order flow, but order creation and buyer approval still remain `pending` until PayPulse retrieves a provider-reported `COMPLETED` order and `COMPLETED` capture.
 
 Each outcome includes the action fingerprint and version, source, provider/reference, safe failure category, limitations, an execution audit link where available, and SHA-256 deterministic fingerprint/idempotency key. Only safe normalized facts are persisted—never credentials, OAuth tokens, Authorization headers, or raw authenticated provider responses.
 
@@ -53,7 +53,7 @@ Payment DNA is recomputed rather than incrementally trusting UI state. A metric 
 
 Every outcome, event, action, customer reference, and derived transaction carries `demo` or `paypal_sandbox`. Repositories filter on source; idempotency uniqueness includes source; and no Demo record can enter a Sandbox projection. Demo remains explicitly selected and execution-disabled.
 
-Transaction Search remains optional. A confirmed Sandbox `403 unsupported_capability` is preserved as that capability status. Phase 8 does not turn it into empty history, fabricate a transaction, or require it to process a stored safe execution outcome. Future verified sources are limited to trusted known PayPal order/payment references and separately reviewed webhook work.
+Transaction Search remains optional. A confirmed Sandbox `403 unsupported_capability` is preserved as that capability status. Phase 8 does not turn it into empty history, fabricate a transaction, or require it to process a stored safe execution outcome. Phase 9 may verify only a trusted known PayPulse-created Orders v2 order by ID; it is not merchant-wide history. Future webhook work remains separately reviewed.
 
 ## Storage and APIs
 
@@ -80,7 +80,9 @@ AI remains optional. It can summarize normalized deterministic context only; it 
 
 ## Current limitations
 
-- Phase 7 write capability remains closed; no capture, refund, message, or monetary operation is created by this phase.
+- The Phase 9 write path is limited to an explicit merchant-approved **Sandbox verification action** with fixed server configuration; it does not capture an intelligence/recommendation action, refund, message, or use live PayPal.
 - Transaction Search is capability-gated and may continue to return `403 unsupported_capability` for a valid Sandbox account.
-- No unverified order ID is looked up and no merchant-wide history is inferred from a known order reference.
+- Only a stored PayPulse-created order reference is looked up; no merchant-wide history is inferred from it.
 - Future webhook/provider adapters must call the server-only verified outcome boundary after validating their provider evidence; browser input is never an evidence source.
+
+See [Phase 9 — Real PayPal Sandbox Verification](PHASE_9_PAYPAL_SANDBOX_VERIFICATION.md) for the Orders v2 lifecycle and local manual buyer approval workflow.
