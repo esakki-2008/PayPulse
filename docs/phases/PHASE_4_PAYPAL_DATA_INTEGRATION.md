@@ -1,6 +1,6 @@
 # Phase 4 — PayPal Sandbox Data Integration
 
-**Status: implemented — read-only PayPal Sandbox transaction visualization.**
+**Status: capability-aware read-only Sandbox integration. OAuth is verified; Transaction Search is currently unsupported for the observed Sandbox app/account.**
 
 Phase 4 keeps the 3D Command Center as the primary PayPulse experience while replacing its default data path with explicitly provenanced, normalized **PayPal Sandbox** transaction data. It does not begin Phase 5, build Payment DNA, produce AI recommendations, or perform any payment operation.
 
@@ -41,8 +41,26 @@ It obtains its OAuth token through the existing shared `src/server/paypal/token-
 - Reporting data can be delayed (the PayPal documentation notes up to approximately three hours), so this is not a real-time ledger.
 - Reporting transaction IDs are not assumed to be globally unique. Normalized persistence uses a source-qualified reporting reference made from the PayPal transaction ID, event code, and initiation time.
 - Transaction Search availability and the `https://uri.paypal.com/services/reporting/search/read` permission are account/app dependent. A `403` is shown as an explicit unsupported-capability error, not as an empty or demo dataset.
-- Sandbox history may be empty. An empty result is an honest, visible empty state.
+- A real local Sandbox verification recorded successful OAuth (`200`, token received), followed by a real Transaction Search request that reached PayPal and returned `403`. PayPulse classifies that result as `unsupported_capability`: OAuth is **available**, while Transaction Search is **unsupported** for this Sandbox app/account. It does not claim that transaction data was retrieved.
+- Sandbox history may be empty. A `200` response with no details is an honest, visible empty state; it is distinct from a `403` capability denial.
 - Phase 4 asks for no order detail. `src/server/paypal/order-service.ts` exists as a Phase 4 boundary/stub and deliberately throws rather than invoking an undocumented or mutation-prone order workflow.
+
+### Capability status model
+
+PayPulse keeps OAuth and reporting separate:
+
+```text
+paypal_sandbox + oauth              = available | unavailable
+paypal_sandbox + transaction_search = available | unsupported | unavailable
+```
+
+A successful reporting response produces `available` for both capabilities. A Transaction Search `403` after token retrieval produces `oauth=available` and `transaction_search=unsupported`. Configuration, token-authentication, or safe network failures remain `unavailable`; no capability is guessed from credentials alone. The data-source UI then states: **“PayPal Transaction Reporting is unavailable for this Sandbox app/account.”** It presents no Sandbox transaction, customer, Payment DNA, AI, or action data for that denied source and never falls back to Demo.
+
+### Appropriate future source—not an automatic fallback
+
+Transaction Search is a merchant reporting/history API. It must not be replaced with an unrelated endpoint merely to populate the dashboard. For a future PayPulse checkout flow that creates and persists its own PayPal order IDs, the documented **Orders v2** `GET /v2/checkout/orders/{id}` endpoint is the preferred point lookup for that known order. It is not a merchant-wide historical listing and cannot substitute for Transaction Search without a known PayPulse-created order ID.
+
+For forward-looking payment facts, a separately designed, server-verified PayPal webhook ingestion path for events from the merchant's own checkout flow may be appropriate. It would require explicit event verification, storage/provenance design, and a dedicated safety review. Neither Orders retrieval nor webhooks is enabled here, and no mutation is introduced. Official references: [Transaction Search](https://developer.paypal.com/api/transaction-search/v1/search-get) and [Orders v2](https://developer.paypal.com/api/orders/v2/).
 
 ## Architecture and data flow
 
@@ -149,7 +167,7 @@ These read APIs choose Sandbox by default and use demo only with `?source=demo`:
 - `GET /api/intelligence`
 - `GET /api/actions`
 
-Responses include source/environment/provenance metadata. Safe error envelopes categorize configuration, authentication (`401`), unsupported capability (`403`), not found (`404`), rate limit (`429`), provider (`5xx`), network, and malformed-response conditions without exposing sensitive provider data.
+Responses include source/environment/provenance metadata and a safe Sandbox capability summary when applicable. Safe error envelopes categorize configuration, authentication (`401`), unsupported capability (`403`), not found (`404`), rate limit (`429`), provider (`5xx`), network, and malformed-response conditions without exposing sensitive provider data. A reporting denial carries only `{ oauth: "available", transactionSearch: "unsupported" }`; it never carries a token, header, account ID, or raw provider body.
 
 ## Verification
 
@@ -161,6 +179,6 @@ npm run test:paypal-transaction-search # credential-gated and skipped without Sa
 npm run build
 ```
 
-The test suite covers normalization/provenance, payer absence, status mapping, pagination bounds, malformed payloads, source-isolated empty data, memory upserts, and multi-currency non-aggregation. `tests/integration/paypal-sandbox-transaction-search.test.ts` is credential-gated and explicitly loads the untracked local `.env.local` using the same silent Next.js environment loader as the standalone verifier. When valid Sandbox OAuth configuration is available, it performs the real read-only Transaction Search request without logging secrets, tokens, headers, or raw provider data. It remains skipped when credentials are unavailable, treats malformed populated configuration as a safe pre-request failure, and accepts an empty Sandbox result as an honest empty dataset.
+The test suite covers normalization/provenance, payer absence, status mapping, pagination bounds, malformed payloads, source-isolated empty data, memory upserts, multi-currency non-aggregation, capability-state mapping, and GET-only reporting behavior. `tests/integration/paypal-sandbox-transaction-search.test.ts` is credential-gated and explicitly loads the untracked local `.env.local` using the same silent Next.js environment loader as the standalone verifier. When valid Sandbox OAuth configuration is available, it performs the real read-only Transaction Search request without logging secrets, tokens, headers, or raw provider data. A `200` response is schema-validated and normalized; an empty `200` remains an empty Sandbox dataset; the observed `403` is asserted as `unsupported_capability`, not treated as a successful transaction retrieval; `401` remains authentication failure; and other responses remain safe categorized failures. The suite stays skipped when credentials are unavailable and treats malformed populated configuration as a safe pre-request failure.
 
 For the prior authentication-only check, see [PayPal Sandbox connectivity](../PAYPAL_SANDBOX_CONNECTIVITY.md).

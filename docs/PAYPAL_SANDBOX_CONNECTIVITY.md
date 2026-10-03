@@ -69,6 +69,10 @@ It prints only this safe report shape:
 
 The report never contains the Client Secret, `Authorization` header, raw provider response, or access token. A failed check returns a nonzero exit code and a safe `errorCategory` such as `configuration`, `authentication`, `network`, `provider_response`, `runtime`, or `unknown`.
 
+## OAuth is not reporting authorization
+
+A real local verification has confirmed that the configured Sandbox app can complete OAuth (`200`) while a separate real `GET /v1/reporting/transactions` request returns `403`. PayPulse records this as `unsupported_capability` for Transaction Search, not as an OAuth failure and not as an empty transaction set. The UI states that PayPal Transaction Reporting is unavailable for the current Sandbox app/account. See [Phase 4 data integration](phases/PHASE_4_PAYPAL_DATA_INTEGRATION.md) for the capability model and the intentionally unimplemented, flow-specific Orders/Webhook alternatives.
+
 ## Automated integration test
 
 With a valid local `.env.local`, run:

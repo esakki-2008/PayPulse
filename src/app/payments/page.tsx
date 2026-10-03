@@ -18,7 +18,7 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
     return <PaymentUniverse snapshot={result.data} />;
   } catch (error) {
     if (error instanceof DataSourceError) {
-      return <DataSourceUnavailable message={error.message} category={error.category} path="/payments" />;
+      return <DataSourceUnavailable message={error.message} category={error.category} capabilities={error.capabilities} path="/payments" />;
     }
     throw error;
   }

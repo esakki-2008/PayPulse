@@ -19,6 +19,7 @@ export function dataSourceResponse<T>(result: DataSourceResult<T>): NextResponse
       environment: result.environment,
       generatedAt: result.generatedAt,
       persistence: result.persistence ?? null,
+      capabilities: result.capabilities ?? null,
       notice:
         result.source === "paypal_sandbox"
           ? "PayPal Sandbox data. This is not production financial data."
@@ -50,6 +51,7 @@ export function apiDataSourceErrorResponse(error: unknown): NextResponse {
           source: "paypal_sandbox",
           environment: "sandbox",
           category: error.category,
+          capabilities: error.capabilities,
         },
       },
       { status: error.status },

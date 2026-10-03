@@ -12,7 +12,7 @@ export default async function ActionsPage({ searchParams }: ActionsPageProps) {
     const [intelligence, actions, events] = await Promise.all([getIntelligenceForSource(source), listActionsForSource(source), listActionEventsForSource(source)]);
     return <ActionControlRoom initialActions={actions} initialEvents={events} intelligence={intelligence.data} source={source} />;
   } catch (error) {
-    if (error instanceof DataSourceError) return <DataSourceUnavailable message={error.message} category={error.category} path="/actions" />;
+    if (error instanceof DataSourceError) return <DataSourceUnavailable message={error.message} category={error.category} capabilities={error.capabilities} path="/actions" />;
     throw error;
   }
 }

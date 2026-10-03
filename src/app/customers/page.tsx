@@ -18,7 +18,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
     return <CustomerNetwork customers={result.data} source={result.source} />;
   } catch (error) {
     if (error instanceof DataSourceError) {
-      return <DataSourceUnavailable message={error.message} category={error.category} path="/customers" />;
+      return <DataSourceUnavailable message={error.message} category={error.category} capabilities={error.capabilities} path="/customers" />;
     }
     throw error;
   }

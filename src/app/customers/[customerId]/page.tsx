@@ -29,7 +29,7 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
     return <CustomerIntelligence customer={customerResult.data} transactions={transactionsResult.data} profile={profile} insights={intelligenceResult.data.insights.filter((insight) => insight.affectedCustomerIds.includes(customerId))} source={source} />;
   } catch (error) {
     if (error instanceof DataSourceError) {
-      return <DataSourceUnavailable message={error.message} category={error.category} path="/customers" />;
+      return <DataSourceUnavailable message={error.message} category={error.category} capabilities={error.capabilities} path="/customers" />;
     }
     throw error;
   }

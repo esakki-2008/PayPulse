@@ -14,7 +14,7 @@ export default async function IntelligencePage({ searchParams }: IntelligencePag
     return <IntelligenceLab intelligence={result.data} />;
   } catch (error) {
     if (error instanceof DataSourceError) {
-      return <DataSourceUnavailable message={error.message} category={error.category} path="/intelligence" />;
+      return <DataSourceUnavailable message={error.message} category={error.category} capabilities={error.capabilities} path="/intelligence" />;
     }
     throw error;
   }

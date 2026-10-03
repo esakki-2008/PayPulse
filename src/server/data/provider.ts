@@ -1,3 +1,9 @@
+import {
+  capabilitiesForTransactionSearchError,
+  PAYPAL_SANDBOX_DATA_CAPABILITIES_AVAILABLE,
+  PAYPAL_SANDBOX_DATA_CAPABILITIES_UNAVAILABLE,
+  type PayPalSandboxCapabilityStatus,
+} from "../paypal/capabilities";
 import { PayPalConfigurationError } from "../paypal/config";
 import { getCachedPayPalSandboxData, type PayPalSandboxDataSnapshot } from "../paypal/data-adapter";
 import { PayPalProviderError } from "../paypal/provider-error";
@@ -31,6 +37,7 @@ export class DataSourceError extends Error {
     message: string,
     readonly category: DataSourceErrorCategory,
     readonly status: number,
+    readonly capabilities: PayPalSandboxCapabilityStatus = PAYPAL_SANDBOX_DATA_CAPABILITIES_UNAVAILABLE,
   ) {
     super(message);
   }
@@ -42,6 +49,8 @@ export interface DataSourceResult<T> {
   readonly environment: "demo" | "sandbox";
   readonly generatedAt: string;
   readonly persistence?: "memory_cache" | "postgres";
+  /** Present only for the explicitly selected PayPal Sandbox source. */
+  readonly capabilities?: PayPalSandboxCapabilityStatus;
 }
 
 export function parseDataSource(value: string | undefined): DataSource {
@@ -81,6 +90,7 @@ export async function getIntelligenceForSource(
     environment: dashboard.environment,
     generatedAt: dashboard.generatedAt,
     persistence: dashboard.persistence,
+    capabilities: dashboard.capabilities,
   };
 }
 
@@ -154,6 +164,7 @@ function sandboxResult<T>(
     environment: "sandbox",
     generatedAt: sandbox.snapshot.generatedAt,
     persistence: sandbox.persistence,
+    capabilities: PAYPAL_SANDBOX_DATA_CAPABILITIES_AVAILABLE,
   };
 }
 
@@ -163,6 +174,7 @@ function toDataSourceError(error: unknown): DataSourceError {
       "PayPal Sandbox is not configured. Select Demo Data or configure server-side Sandbox variables.",
       "configuration",
       503,
+      PAYPAL_SANDBOX_DATA_CAPABILITIES_UNAVAILABLE,
     );
   }
 
@@ -171,16 +183,23 @@ function toDataSourceError(error: unknown): DataSourceError {
       "PayPal Sandbox authentication could not be completed safely.",
       error.category === "authentication" ? "authentication" : "network",
       error.status ?? 502,
+      PAYPAL_SANDBOX_DATA_CAPABILITIES_UNAVAILABLE,
     );
   }
 
   if (error instanceof PayPalProviderError) {
-    return new DataSourceError(error.message, error.category, error.status ?? 502);
+    return new DataSourceError(
+      error.message,
+      error.category,
+      error.status ?? 502,
+      capabilitiesForTransactionSearchError(error.category),
+    );
   }
 
   return new DataSourceError(
     "PayPal Sandbox data is currently unavailable.",
     "unknown",
     502,
+    PAYPAL_SANDBOX_DATA_CAPABILITIES_UNAVAILABLE,
   );
 }

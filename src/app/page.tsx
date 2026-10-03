@@ -12,7 +12,7 @@ export default async function CommandPage({ searchParams }: CommandPageProps) {
     const [dashboard, intelligence, agentActions] = await Promise.all([getDashboardForSource(source), getIntelligenceForSource(source), listActionsForSource(source)]);
     return <CommandCenter snapshot={dashboard.data} deterministicInsightCount={intelligence.data.insights.filter((insight) => insight.type !== "insufficient_data").length} customerStates={Object.fromEntries(intelligence.data.customerProfiles.map((profile) => [profile.customerId, profile.state]))} agentActions={agentActions} />;
   } catch (error) {
-    if (error instanceof DataSourceError) return <DataSourceUnavailable message={error.message} category={error.category} path="/" />;
+    if (error instanceof DataSourceError) return <DataSourceUnavailable message={error.message} category={error.category} capabilities={error.capabilities} path="/" />;
     throw error;
   }
 }

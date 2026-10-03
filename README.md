@@ -12,6 +12,10 @@ Phase 6 deterministic rules create review-only action candidates from eligible P
 
 Phase 7 adds an explicit execution-preview flow, exact-version validation, evidence/approval/expiry checks, deterministic idempotency, an exclusive execution reservation, normalized safe outcomes, and durable execution-ledger migration support. The documented candidate PayPal Sandbox action is Orders v2 capture, but PayPulse has no verified app capability or action-bound buyer-approved Order ID. Therefore the execution capability is truthfully closed: no PayPal write request is constructed, and no success is shown without a PayPal confirmation.
 
+### PayPal reporting capability
+
+OAuth verification and reporting authorization are separate. A real local Sandbox check verified OAuth (`200`) but Transaction Search reached PayPal and returned `403`, which PayPulse classifies as `unsupported_capability`. The UI explicitly states **“PayPal Transaction Reporting is unavailable for this Sandbox app/account.”** No transaction/customer records are fabricated and Demo remains an explicit, isolated source. A future checkout flow may use documented Orders v2 point lookups only for known PayPulse-created order IDs; it is not an automatic substitute for merchant reporting history.
+
 ### Run the command center
 
 ```bash
