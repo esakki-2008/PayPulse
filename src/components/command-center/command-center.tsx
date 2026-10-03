@@ -23,6 +23,7 @@ import { Panel } from "@/components/ui/panel";
 import { StatusPill } from "@/components/ui/status-pill";
 import { formatCurrency, formatPercent, titleCase } from "@/lib/format";
 import type {
+  ActionCandidate,
   ActionRecommendation,
   ActionStatus,
   CoreState,
@@ -36,25 +37,31 @@ export function CommandCenter({
   snapshot,
   deterministicInsightCount = 0,
   customerStates = {},
+  agentActions = [],
 }: {
   readonly snapshot: DashboardSnapshot;
   readonly deterministicInsightCount?: number;
   readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>;
+  readonly agentActions?: readonly ActionCandidate[];
 }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
-  const [actions, setActions] = useState(snapshot.actions);
-  const [selectedActionId, setSelectedActionId] = useState(snapshot.actions[0]?.id ?? "");
+  // Phase 6 candidates are generated explicitly in the Action Command Center.
+  // Legacy seeded Phase 3 actions are intentionally never surfaced as source facts.
+  const [actions, setActions] = useState<readonly ActionRecommendation[]>([]);
+  const [selectedActionId, setSelectedActionId] = useState("");
   const [approvalState, setApprovalState] = useState<ApprovalState>("idle");
   const [feedback, setFeedback] = useState("");
 
   const selectedAction = actions.find((action) => action.id === selectedActionId) ?? actions[0];
   const coreState = useMemo<CoreState>(() => {
+    if (agentActions.some((action) => action.status === "ready_for_execution" || action.status === "approved")) return "approved";
+    if (agentActions.some((action) => action.status === "proposed")) return "recommending";
     if (actions.some((action) => action.status === "awaiting_approval")) return "awaiting_approval";
     if (actions.some((action) => action.status === "approved")) return "approved";
     if (deterministicInsightCount > 0) return "insight_detected";
     return snapshot.coreState;
-  }, [actions, deterministicInsightCount, snapshot.coreState]);
+  }, [actions, agentActions, deterministicInsightCount, snapshot.coreState]);
 
   async function approveSelectedAction(): Promise<void> {
     if (!selectedAction || !["recommended", "awaiting_approval"].includes(selectedAction.status)) {
@@ -133,8 +140,8 @@ export function CommandCenter({
           </div>
           <div className="relative mt-3 grid gap-2 px-2 sm:grid-cols-3">
             <SignalChip icon={<Radar size={14} />} label={`${deterministicInsightCount} insights`} detail="evidence-backed" />
-            <SignalChip icon={<CircleAlert size={14} />} label={deterministicInsightCount ? "patterns detected" : "insufficient history"} detail={deterministicInsightCount ? "review evidence" : "no behavior invented"} tone="amber" />
-            <SignalChip icon={<ShieldCheck size={14} />} label="Execution disabled" detail="read-only analysis" tone="violet" />
+            <SignalChip icon={<CircleAlert size={14} />} label={`${agentActions.length} action candidates`} detail={agentActions.length ? "merchant review" : "none generated"} tone="amber" />
+            <SignalChip icon={<ShieldCheck size={14} />} label="Execution disabled" detail="approval only" tone="violet" />
           </div>
         </Panel>
 
@@ -286,7 +293,7 @@ function ActionPlanPanel({
             <CircleDashed size={14} aria-hidden="true" /> Agentic action plan
           </div>
           <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-[-0.04em] text-white">Review before the system acts.</h2>
-          <p className="mt-2 text-sm text-slate-400">{actions.length > 0 ? "6 reminder drafts • 2 retention opportunities • 1 anomaly review" : "No action recommendations are generated from PayPal Sandbox data in Phase 4."}</p>
+          <p className="mt-2 text-sm text-slate-400">{actions.length > 0 ? "Legacy demo actions are intentionally hidden in Phase 6." : "Generate evidence-bound candidates explicitly in the Action Command Center."}</p>
         </div>
         <StatusPill status="awaiting_approval" />
       </div>

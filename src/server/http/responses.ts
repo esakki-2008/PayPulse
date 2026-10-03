@@ -5,6 +5,10 @@ import {
   ActionNotFoundError,
   ActionStateError,
 } from "../actions/service";
+import {
+  AgentActionNotFoundError,
+  AgentActionStateError,
+} from "../actions/engine";
 import { DataSourceError, type DataSourceResult } from "../data/provider";
 
 export function dataSourceResponse<T>(result: DataSourceResult<T>): NextResponse {
@@ -66,11 +70,11 @@ export function apiErrorResponse(error: unknown): NextResponse {
     return NextResponse.json({ error: "Invalid request input." }, { status: 400 });
   }
 
-  if (error instanceof ActionNotFoundError) {
+  if (error instanceof ActionNotFoundError || error instanceof AgentActionNotFoundError) {
     return NextResponse.json({ error: error.message }, { status: 404 });
   }
 
-  if (error instanceof ActionStateError) {
+  if (error instanceof ActionStateError || error instanceof AgentActionStateError) {
     return NextResponse.json({ error: error.message }, { status: 409 });
   }
 

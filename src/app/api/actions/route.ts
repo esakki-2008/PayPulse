@@ -1,12 +1,16 @@
-import { getDashboardForSource, parseDataSource } from "@/server/data/provider";
-import { apiDataSourceErrorResponse, dataSourceResponse } from "@/server/http/responses";
+import { listActionsForSource } from "@/server/actions/engine";
+import { DataSourceError, getIntelligenceForSource, parseDataSource } from "@/server/data/provider";
+import { apiDataSourceErrorResponse, apiErrorResponse, dataSourceResponse } from "@/server/http/responses";
 
 export async function GET(request: Request): Promise<Response> {
   try {
     const source = parseDataSource(new URL(request.url).searchParams.get("source") ?? undefined);
-    const result = await getDashboardForSource(source);
-    return dataSourceResponse({ ...result, data: result.data.actions });
-  } catch (error) {
-    return apiDataSourceErrorResponse(error);
-  }
+    await getIntelligenceForSource(source);
+    return dataSourceResponse({
+      data: await listActionsForSource(source),
+      source,
+      environment: source === "demo" ? "demo" : "sandbox",
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) { return error instanceof DataSourceError ? apiDataSourceErrorResponse(error) : apiErrorResponse(error); }
 }

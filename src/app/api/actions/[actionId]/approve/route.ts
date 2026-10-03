@@ -1,30 +1,18 @@
 import { z } from "zod";
 
-import {
-  approveAction,
-  requireDemoMerchantOperator,
-  requireExplicitDemoSource,
-} from "@/server/actions/service";
-import { apiErrorResponse, demoDataResponse } from "@/server/http/responses";
+import { approveAgentAction } from "@/server/actions/engine";
+import { parseDataSource } from "@/server/data/provider";
+import { apiErrorResponse, dataSourceResponse } from "@/server/http/responses";
 
-const approvalSchema = z.object({
-  version: z.number().int().positive(),
-});
-
-interface RouteContext {
-  readonly params: Promise<{ actionId: string }>;
-}
+const inputSchema = z.object({ version: z.number().int().positive(), reason: z.string().trim().min(1).max(500).optional() }).strict();
+interface RouteContext { readonly params: Promise<{ actionId: string }>; }
 
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
   try {
-    const { actionId } = await context.params;
-    const input = approvalSchema.parse(await request.json());
-    requireExplicitDemoSource(request);
-    const actor = requireDemoMerchantOperator(request);
-    const action = await approveAction(actionId, input.version, actor);
-
-    return demoDataResponse(action);
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+    const [{ actionId }, body] = await Promise.all([context.params, request.json()]);
+    const source = parseDataSource(new URL(request.url).searchParams.get("source") ?? undefined);
+    const input = inputSchema.parse(body);
+    const action = await approveAgentAction(source, actionId, input.version, input.reason);
+    return dataSourceResponse({ data: action, source, environment: source === "demo" ? "demo" : "sandbox", generatedAt: new Date().toISOString() });
+  } catch (error) { return apiErrorResponse(error); }
 }

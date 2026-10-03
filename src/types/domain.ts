@@ -256,6 +256,74 @@ export interface ActionEvent {
   readonly source: "demo";
 }
 
+export type AgentActionType =
+  | "PAYMENT_REMINDER"
+  | "CUSTOMER_REVIEW"
+  | "RETENTION_REVIEW"
+  | "PAYMENT_ANOMALY_REVIEW"
+  | "REVENUE_REVIEW"
+  | "CUSTOMER_FOLLOWUP";
+
+export type AgentActionStatus =
+  | "proposed"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "ready_for_execution";
+
+export interface ActionEvidence {
+  readonly type: "customer_metric" | "historical_pattern" | "transaction_pattern" | "revenue_metric" | "insight";
+  readonly field: string;
+  readonly value: string;
+  readonly transactionIds: readonly string[];
+}
+
+export interface ActionCandidate {
+  readonly id: string;
+  readonly fingerprint: string;
+  readonly version: number;
+  readonly type: AgentActionType;
+  readonly title: string;
+  readonly summary: string;
+  readonly reason: string;
+  readonly severity: Severity;
+  readonly confidence: number;
+  readonly source: DataSource;
+  readonly customerIds: readonly string[];
+  readonly transactionIds: readonly string[];
+  readonly evidence: readonly ActionEvidence[];
+  readonly whatWillHappen: string;
+  readonly expectedImpact: string;
+  readonly limitations: readonly string[];
+  readonly createdAt: string;
+  readonly expiresAt: string;
+  readonly status: AgentActionStatus;
+}
+
+export interface AgentActionPlan {
+  readonly id: string;
+  readonly fingerprint: string;
+  readonly source: DataSource;
+  readonly title: string;
+  readonly summary: string;
+  readonly actions: readonly ActionCandidate[];
+  readonly totalActions: number;
+  readonly createdAt: string;
+  readonly expiresAt: string;
+  readonly status: "proposed" | "approved" | "rejected" | "expired" | "ready_for_execution";
+}
+
+export interface AgentActionEvent {
+  readonly id: string;
+  readonly actionId: string;
+  readonly previousStatus: AgentActionStatus;
+  readonly newStatus: AgentActionStatus;
+  readonly actor: "merchant";
+  readonly timestamp: string;
+  readonly reason: string | null;
+  readonly source: DataSource;
+}
+
 export interface DashboardMetrics {
   readonly transactionCount: number;
   readonly successfulPaymentCount: number;
