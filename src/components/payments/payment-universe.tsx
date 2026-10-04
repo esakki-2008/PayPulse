@@ -1,64 +1,56 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Filter, Search, Sparkles } from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, Filter, Search, Sparkles, Waves } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { IntelligenceCore } from "@/components/3d/intelligence-core";
 import { DataSourceSwitch } from "@/components/ui/data-source-switch";
-import { Panel } from "@/components/ui/panel";
-import { StatusPill } from "@/components/ui/status-pill";
+import { IntelligenceLifecycle } from "@/components/ui/intelligence-lifecycle";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 import type { DashboardSnapshot, TransactionStatus } from "@/types/domain";
 
-const statuses: readonly ("all" | TransactionStatus)[] = [
-  "all",
-  "completed",
-  "pending",
-  "failed",
-  "refunded",
-  "unknown",
-];
+const statuses: readonly ("all" | TransactionStatus)[] = ["all", "completed", "pending", "failed", "refunded", "unknown"];
 
 export function PaymentUniverse({ snapshot }: { readonly snapshot: DashboardSnapshot }) {
   const { customers, transactions, source } = snapshot;
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statuses)[number]>("all");
   const [selectedTransactionId, setSelectedTransactionId] = useState(transactions[0]?.id ?? "");
-  const filteredTransactions = useMemo(
-    () =>
-      transactions.filter((transaction) => {
-        const customer = customers.find((item) => item.id === transaction.customerId);
-        const matchesText = `${transaction.id} ${transaction.paypalTransactionId ?? ""} ${customer?.displayName ?? ""}`.toLowerCase().includes(query.toLowerCase());
-        const matchesStatus = status === "all" || transaction.status === status;
-        return matchesText && matchesStatus;
-      }),
-    [customers, query, status, transactions],
-  );
+  const filteredTransactions = useMemo(() => transactions.filter((transaction) => {
+    const customer = customers.find((item) => item.id === transaction.customerId);
+    return `${transaction.id} ${transaction.paypalTransactionId ?? ""} ${customer?.displayName ?? ""}`.toLowerCase().includes(query.toLowerCase()) && (status === "all" || transaction.status === status);
+  }), [customers, query, status, transactions]);
   const selected = transactions.find((transaction) => transaction.id === selectedTransactionId) ?? filteredTransactions[0];
   const customer = customers.find((item) => item.id === selected?.customerId);
+  const sourceSuffix = source === "demo" ? "?source=demo" : "";
 
   return (
-    <div className="space-y-6">
-      <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.19em] text-cyan-200">Payment universe</p>
-          <h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-white">Payment activity in motion.</h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">{source === "paypal_sandbox" ? "Normalized PayPal Sandbox transactions flow into the intelligence core. No live-money data is shown." : "Interactive demo payment particles flow into the intelligence core. Records are explicitly synthetic."}</p>
+    <div className="space-y-5">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-cyan-200">Payment field</p><h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-[-.055em] text-white sm:text-5xl">Payment activity, <span className="text-cyan-200">in motion.</span></h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{source === "paypal_sandbox" ? "Normalized PayPal Sandbox payment records move through the intelligence field. No live-money data is shown." : "Synthetic demo payment particles demonstrate the intelligence flow and are never presented as PayPal data."}</p></div><DataSourceSwitch source={source} sandboxConnected={source === "paypal_sandbox"} /></section>
+
+      <section className="relative isolate min-h-[610px] overflow-hidden rounded-[2rem] border border-cyan-300/15 bg-[radial-gradient(circle_at_50%_48%,rgba(18,141,213,.13),transparent_39%),rgba(5,10,25,.72)] p-4 sm:p-6">
+        <div className="grid-noise pointer-events-none absolute inset-0 opacity-70" />
+        <div className="relative z-10 flex items-start justify-between"><div><p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.19em] text-cyan-100"><Waves size={14} /> Payment streams → core → signal</p><p className="mt-1 text-xs text-slate-500">Select a customer particle to inspect its payment intelligence.</p></div><span className="rounded-full border border-cyan-300/20 bg-cyan-300/[.06] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.13em] text-cyan-100">{transactions.length} records</span></div>
+        <div className="absolute inset-x-1 top-14 bottom-24 sm:inset-x-8"><IntelligenceCore state={snapshot.coreState} customers={customers} onCustomerSelect={(customerId) => { window.location.assign(`/customers/${customerId}${sourceSuffix}`); }} /></div>
+        <div className="absolute left-5 top-28 hidden w-[180px] rounded-2xl border border-emerald-300/15 bg-[#08152c]/70 p-3 backdrop-blur-xl lg:block"><p className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[.15em] text-emerald-100"><CheckCircle2 size={13} /> Successful</p><p className="mt-2 text-2xl font-semibold text-white">{snapshot.metrics.successfulPaymentCount}</p><p className="mt-1 text-[11px] text-slate-500">verified record status</p></div>
+        <div className="absolute right-5 top-40 hidden w-[180px] rounded-2xl border border-rose-300/15 bg-[#08152c]/70 p-3 backdrop-blur-xl lg:block"><p className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[.15em] text-rose-100"><CircleAlert size={13} /> Watch signals</p><p className="mt-2 text-2xl font-semibold text-white">{snapshot.metrics.failedCount + snapshot.metrics.pendingCount}</p><p className="mt-1 text-[11px] text-slate-500">failed or pending records</p></div>
+        <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/[.09] bg-[#071126]/75 p-3 backdrop-blur-xl sm:inset-x-6"><IntelligenceLifecycle state={snapshot.coreState} compact /></div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3"><PaymentSignal icon={<Activity size={16} />} label="Volume pulse" value={currencyValue(snapshot)} detail={snapshot.metrics.currencies.length > 1 ? "shown per currency; no FX conversion" : "observed transaction value"} /><PaymentSignal icon={<Sparkles size={16} />} label="Customer connections" value={String(snapshot.metrics.customerCount)} detail={`${snapshot.metrics.recentPaymentActivity} recent payment relationship${snapshot.metrics.recentPaymentActivity === 1 ? "" : "s"}`} tone="violet" /><PaymentSignal icon={<CircleAlert size={16} />} label="Anomaly surface" value={String(snapshot.metrics.failedCount + snapshot.metrics.pendingCount)} detail="requires review; no automatic action" tone="amber" /></section>
+
+      <details className="group rounded-2xl border border-white/[.1] bg-[#09142b]/62 open:bg-[#0b1831]/72">
+        <summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium text-slate-100"><span>Open transaction details</span><span className="text-xs text-slate-500">Secondary inspection layer · {filteredTransactions.length} matching record{filteredTransactions.length === 1 ? "" : "s"}</span></summary>
+        <div className="grid gap-4 border-t border-white/[.08] p-4 xl:grid-cols-[1.12fr_.88fr]">
+          <section className="rounded-xl border border-white/[.07] bg-black/10"><div className="flex flex-col gap-3 border-b border-white/[.07] p-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-200">Transaction stream</p><div className="flex flex-wrap gap-2"><label className="flex items-center gap-2 rounded-lg border border-white/[.08] bg-black/20 px-2.5 py-2 text-xs text-slate-400"><Search size={13} /><span className="sr-only">Filter transactions</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" className="w-28 bg-transparent outline-none placeholder:text-slate-600" /></label><label className="flex items-center gap-2 rounded-lg border border-white/[.08] bg-black/20 px-2.5 py-2 text-xs text-slate-400"><Filter size={13} /><span className="sr-only">Transaction status</span><select value={status} onChange={(event) => setStatus(event.target.value as (typeof statuses)[number])} className="bg-transparent text-xs text-slate-300 outline-none">{statuses.map((value) => <option key={value} value={value} className="bg-slate-950">{value}</option>)}</select></label></div></div><div className="max-h-[440px] overflow-y-auto">{filteredTransactions.map((transaction) => { const itemCustomer = customers.find((item) => item.id === transaction.customerId); return <button key={transaction.id} type="button" onClick={() => setSelectedTransactionId(transaction.id)} className={`focus-ring flex w-full items-center justify-between gap-3 border-b border-white/[.055] px-4 py-3 text-left transition hover:bg-cyan-300/[.045] ${selected?.id === transaction.id ? "bg-cyan-300/[.075]" : ""}`}><span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-200">{itemCustomer?.displayName ?? "Unattributed payment"}</span><span className="mt-1 block truncate text-xs text-slate-500">{transaction.paypalTransactionId ?? transaction.id} · {formatRelativeDate(transaction.occurredAt)}</span></span><span className="shrink-0 text-right"><span className="block text-sm font-medium text-white">{formatCurrency(transaction.amount, transaction.currency)}</span><span className="mt-1 block text-[9px] font-semibold uppercase tracking-[.13em] text-slate-500">{transaction.status}</span></span></button>; })}{filteredTransactions.length === 0 ? <p className="p-7 text-center text-sm text-slate-500">No record matches the current inspection filter.</p> : null}</div></section>
+          <TransactionDetail selected={selected} customer={customer} source={source} />
         </div>
-        <DataSourceSwitch source={source} sandboxConnected={source === "paypal_sandbox"} />
-      </section>
-
-      <Panel className="p-3 sm:p-5"><div className="h-[390px]"><IntelligenceCore state={snapshot.coreState} customers={customers} /></div></Panel>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <Panel className="overflow-hidden p-0">
-          <div className="flex flex-col gap-3 border-b border-white/8 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200"><Sparkles size={14} /> Transaction timeline</div><div className="flex flex-wrap gap-2"><label className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.025] px-2.5 py-2 text-xs text-slate-400"><Search size={13} /><span className="sr-only">Filter transactions</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" className="w-24 bg-transparent outline-none placeholder:text-slate-600" /></label><label className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.025] px-2.5 py-2 text-xs text-slate-400"><Filter size={13} /><span className="sr-only">Transaction status</span><select value={status} onChange={(event) => setStatus(event.target.value as (typeof statuses)[number])} className="bg-transparent text-xs text-slate-300 outline-none">{statuses.map((value) => <option key={value} value={value} className="bg-slate-950">{value}</option>)}</select></label></div></div>
-          <div className="divide-y divide-white/6">{filteredTransactions.map((transaction) => { const itemCustomer = customers.find((item) => item.id === transaction.customerId); return <button key={transaction.id} type="button" onClick={() => setSelectedTransactionId(transaction.id)} className={`focus-ring flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition hover:bg-white/[0.03] ${selected?.id === transaction.id ? "bg-cyan-300/[0.055]" : ""}`}><span className="flex min-w-0 items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-full border border-cyan-300/15 bg-cyan-300/5 text-xs font-semibold text-cyan-100">{itemCustomer?.initials ?? "PP"}</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-200">{itemCustomer?.displayName ?? "Unattributed PayPal transaction"}</span><span className="mt-1 block text-xs text-slate-500">{transaction.paypalTransactionId ?? transaction.id} · {formatRelativeDate(transaction.occurredAt)}</span></span></span><span className="shrink-0 text-right"><span className="block text-sm font-medium text-white">{formatCurrency(transaction.amount, transaction.currency)}</span><span className="mt-1 block text-[10px] uppercase tracking-[0.12em] text-slate-500">{transaction.status}</span></span></button>; })}{filteredTransactions.length === 0 ? <p className="p-7 text-center text-sm text-slate-500">PayPal Sandbox is connected, but no transactions are currently available for this bounded date range.</p> : null}</div>
-        </Panel>
-        <Panel className="p-5"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200">Transaction details</p>{selected ? <><div className="mt-5 flex items-start justify-between gap-4"><div><p className="text-lg font-semibold text-white">{customer?.displayName ?? "Unattributed payer"}</p><p className="mt-1 break-all text-xs text-slate-500">{selected.paypalTransactionId ?? selected.id}</p></div>{customer?.risk ? <StatusPill status={customer.risk} /> : <StatusPill status={source === "paypal_sandbox" ? "sandbox" : "demo"} />}</div><p className="mt-6 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-white">{formatCurrency(selected.amount, selected.currency)}</p><dl className="mt-6 grid gap-3 text-xs"><Detail label="PayPal transaction ID" value={selected.paypalTransactionId ?? "Not provided"} /><Detail label="PayPal order ID" value={selected.paypalOrderId ?? "Not provided"} /><Detail label="Status" value={selected.status} /><Detail label="Created" value={new Date(selected.createdAt).toLocaleString()} /><Detail label="Customer reference" value={selected.payerReference ?? "Not provided"} /><Detail label="Source" value={source === "paypal_sandbox" ? "PayPal Sandbox" : "Demo Data"} /></dl><p className="mt-5 text-xs leading-5 text-slate-500">{selected.aiInterpretation ?? "No AI interpretation is generated for PayPal Sandbox records in Phase 4."}</p></> : <p className="mt-5 text-sm text-slate-500">Select a transaction to inspect it.</p>}</Panel>
-      </section>
+      </details>
     </div>
   );
 }
 
-function Detail({ label, value }: { readonly label: string; readonly value: string }) { return <div className="flex items-center justify-between gap-4 rounded-lg border border-white/7 bg-black/10 px-3 py-2.5"><dt className="text-slate-500">{label}</dt><dd className="max-w-[58%] truncate text-right text-slate-200" title={value}>{value}</dd></div>; }
+function currencyValue(snapshot: DashboardSnapshot): string { return snapshot.metrics.primaryCurrency && snapshot.metrics.totalTransactionValue !== null ? formatCurrency(snapshot.metrics.totalTransactionValue, snapshot.metrics.primaryCurrency) : "Multi-currency"; }
+function PaymentSignal({ icon, label, value, detail, tone = "cyan" }: { readonly icon: ReactNode; readonly label: string; readonly value: string; readonly detail: string; readonly tone?: "cyan" | "violet" | "amber" }) { const toneClass = { cyan: "border-cyan-300/15 text-cyan-100", violet: "border-violet-300/15 text-violet-100", amber: "border-amber-300/15 text-amber-100" }[tone]; return <article className={`holo-panel rounded-2xl p-4 ${toneClass}`}><p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.15em]">{icon}{label}</p><p className="mt-3 text-2xl font-semibold tracking-[-.04em] text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></article>; }
+function TransactionDetail({ selected, customer, source }: { readonly selected: DashboardSnapshot["transactions"][number] | undefined; readonly customer: DashboardSnapshot["customers"][number] | undefined; readonly source: DashboardSnapshot["source"] }) { if (!selected) return <aside className="rounded-xl border border-white/[.07] bg-black/10 p-5 text-sm text-slate-500">Select a payment stream particle to inspect its normalized record.</aside>; return <aside className="rounded-xl border border-cyan-300/12 bg-cyan-300/[.025] p-5"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-cyan-200">Selected normalized record</p><h2 className="mt-3 text-lg font-semibold text-white">{customer?.displayName ?? "Unattributed payer"}</h2><p className="mt-1 break-all text-xs text-slate-500">{selected.paypalTransactionId ?? selected.id}</p><p className="mt-6 text-4xl font-semibold tracking-[-.05em] text-white">{formatCurrency(selected.amount, selected.currency)}</p><dl className="mt-5 space-y-2 text-xs"><Field label="Provider order" value={selected.paypalOrderId ?? "Not provided"} /><Field label="Record status" value={selected.status} /><Field label="Observed" value={new Date(selected.createdAt).toLocaleString()} /><Field label="Source" value={source === "paypal_sandbox" ? "PayPal Sandbox" : "Explicit Demo Data"} /></dl><p className="mt-5 border-t border-white/[.08] pt-4 text-xs leading-5 text-slate-500">{selected.aiInterpretation ?? "No AI interpretation is generated for this normalized payment record."}</p></aside>; }
+function Field({ label, value }: { readonly label: string; readonly value: string }) { return <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">{label}</dt><dd className="max-w-[60%] truncate text-right text-slate-200" title={value}>{value}</dd></div>; }

@@ -1,39 +1,15 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  CheckCircle2,
-  ChevronRight,
-  CircleAlert,
-  CircleDashed,
-  Cpu,
-  Radar,
-  ShieldCheck,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Activity, ArrowUpRight, BrainCircuit, Gauge, ShieldCheck, Sparkles, Waves } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { IntelligenceCore } from "@/components/3d/intelligence-core";
 import { DataSourceSwitch } from "@/components/ui/data-source-switch";
-import { Panel } from "@/components/ui/panel";
-import { StatusPill } from "@/components/ui/status-pill";
-import { formatCurrency, formatPercent, titleCase } from "@/lib/format";
-import type {
-  ActionCandidate,
-  ActionOutcome,
-  ActionRecommendation,
-  ActionStatus,
-  CoreState,
-  DashboardSnapshot,
-  IntelligenceSignal,
-  LearningEvent,
-} from "@/types/domain";
-
-type ApprovalState = "idle" | "saving" | "success" | "error";
+import { IntelligenceLifecycle, intelligenceStages, type IntelligenceStage } from "@/components/ui/intelligence-lifecycle";
+import { formatCurrency, titleCase } from "@/lib/format";
+import type { ActionCandidate, ActionOutcome, CoreState, DashboardSnapshot, LearningEvent } from "@/types/domain";
 
 export function CommandCenter({
   snapshot,
@@ -52,14 +28,7 @@ export function CommandCenter({
 }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
-  // Phase 6 candidates are generated explicitly in the Action Command Center.
-  // Legacy seeded Phase 3 actions are intentionally never surfaced as source facts.
-  const [actions, setActions] = useState<readonly ActionRecommendation[]>([]);
-  const [selectedActionId, setSelectedActionId] = useState("");
-  const [approvalState, setApprovalState] = useState<ApprovalState>("idle");
-  const [feedback, setFeedback] = useState("");
-
-  const selectedAction = actions.find((action) => action.id === selectedActionId) ?? actions[0];
+  const [selectedStage, setSelectedStage] = useState<IntelligenceStage>(intelligenceStages[0]!);
   const coreState = useMemo<CoreState>(() => {
     const latestOutcome = [...verifiedOutcomes].sort((left, right) => left.timestamp.localeCompare(right.timestamp)).at(-1);
     const latestLearning = [...learningEvents].sort((left, right) => left.timestamp.localeCompare(right.timestamp)).at(-1);
@@ -69,393 +38,78 @@ export function CommandCenter({
     if (latestOutcome?.status === "succeeded" || agentActions.some((action) => action.status === "succeeded")) return "completed";
     if (agentActions.some((action) => action.status === "ready_for_execution" || action.status === "approved")) return "approved";
     if (agentActions.some((action) => action.status === "proposed")) return "recommending";
-    if (actions.some((action) => action.status === "awaiting_approval")) return "awaiting_approval";
-    if (actions.some((action) => action.status === "approved")) return "approved";
     if (deterministicInsightCount > 0) return "insight_detected";
     return snapshot.coreState;
-  }, [actions, agentActions, deterministicInsightCount, learningEvents, snapshot.coreState, verifiedOutcomes]);
+  }, [agentActions, deterministicInsightCount, learningEvents, snapshot.coreState, verifiedOutcomes]);
 
-  async function approveSelectedAction(): Promise<void> {
-    if (!selectedAction || !["recommended", "awaiting_approval"].includes(selectedAction.status)) {
-      return;
-    }
-
-    setApprovalState("saving");
-    setFeedback("");
-
-    try {
-      const response = await fetch(`/api/actions/${selectedAction.id}/approve?source=demo`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-paypulse-demo-role": "merchant_operator",
-        },
-        body: JSON.stringify({ version: selectedAction.version }),
-      });
-      const payload = (await response.json()) as {
-        data?: ActionRecommendation;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.data) {
-        throw new Error(payload.error ?? "Approval could not be recorded.");
-      }
-
-      setActions((current) =>
-        current.map((action) => (action.id === payload.data?.id ? payload.data : action)),
-      );
-      setApprovalState("success");
-      setFeedback("Merchant approval recorded. No PayPal operation has been performed.");
-    } catch (error) {
-      setApprovalState("error");
-      setFeedback(error instanceof Error ? error.message : "Approval could not be recorded.");
-    }
-  }
+  const sourceSuffix = snapshot.source === "demo" ? "?source=demo" : "";
+  const amount = snapshot.metrics.primaryCurrency && snapshot.metrics.totalTransactionValue !== null
+    ? formatCurrency(snapshot.metrics.totalTransactionValue, snapshot.metrics.primaryCurrency)
+    : "Multi-currency";
+  const leadSignal = snapshot.signals[0];
+  const learningApplied = learningEvents.some((event) => event.learningStatus === "applied");
 
   return (
-    <div className="space-y-6">
-      <section className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div className="max-w-2xl">
-          <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.19em] text-cyan-200">
-            <span className="size-2 rounded-full bg-cyan-200 shadow-[0_0_14px_rgba(165,243,252,1)]" />
-            PayPulse intelligence online
-          </div>
-          <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">
-            {snapshot.source === "demo" ? <>Payments, understood <span className="text-cyan-200">before</span> they become problems.</> : <>Sandbox payments, <span className="text-violet-200">normalized</span> for clarity.</>}
-          </h1>
-          <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400">
-            {snapshot.source === "demo" ? "Explicit demo records power this visual mode. Deterministic intelligence remains evidence-bound." : `${snapshot.metrics.transactionCount} PayPal Sandbox transactions are represented in the payment universe. ${deterministicInsightCount ? `${deterministicInsightCount} evidence-backed deterministic insight${deterministicInsightCount === 1 ? "" : "s"} detected.` : "Insufficient transaction history for behavioral analysis."}`}
-          </p>
+    <div className="space-y-5">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-200"><span className="size-1.5 rounded-full bg-cyan-200 shadow-[0_0_12px_currentColor]" /> PayPulse AI payment intelligence agent</p>
+          <h1 className="mt-3 max-w-3xl font-[family-name:var(--font-display)] text-3xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">Every payment has a pulse. <span className="text-cyan-200">We make it actionable.</span></h1>
         </div>
         <DataSourceSwitch source={snapshot.source} sandboxConnected={snapshot.source === "paypal_sandbox"} />
       </section>
 
-      <MetricRail snapshot={snapshot} />
+      <section className="relative isolate min-h-[680px] overflow-hidden rounded-[2rem] border border-cyan-300/15 bg-[radial-gradient(circle_at_50%_46%,rgba(26,155,223,.12),rgba(5,10,28,.44)_43%,rgba(4,7,19,.95)_86%)] px-3 py-4 sm:p-6 lg:min-h-[720px]">
+        <div className="grid-noise pointer-events-none absolute inset-0 opacity-70" />
+        <div className="holo-scanlines absolute inset-0" aria-hidden="true" />
+        <div className="relative z-10 flex items-center justify-between gap-4 px-2">
+          <div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-cyan-100">Central Intelligence Core</p><p className="mt-1 text-xs text-slate-500">Payment signals converge; human approval remains the control plane.</p></div>
+          <CoreState coreState={coreState} />
+        </div>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.42fr)_minmax(330px,0.76fr)]">
-        <Panel className="pulse-border relative min-h-[510px] overflow-hidden p-3 sm:p-5">
-          <div className="grid-noise pointer-events-none absolute inset-0 opacity-70" />
-          <div className="relative flex items-center justify-between px-2 pt-1">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">3D payment intelligence core</p>
-              <p className="mt-1 text-xs text-slate-500">Select a customer node to enter intelligence mode.</p>
-            </div>
-            <CoreStateLabel state={coreState} />
-          </div>
-          <div className="relative mt-2 h-[390px] sm:h-[440px]">
-            <IntelligenceCore
-              state={coreState}
-              customers={snapshot.customers}
-              customerStates={customerStates}
-              onCustomerSelect={(customerId) => router.push(`/customers/${customerId}${snapshot.source === "demo" ? "?source=demo" : ""}`)}
-            />
-          </div>
-          <div className="relative mt-3 grid gap-2 px-2 sm:grid-cols-3">
-            <SignalChip icon={<Radar size={14} />} label={`${deterministicInsightCount} insights`} detail="evidence-backed" />
-            <SignalChip icon={<CircleAlert size={14} />} label={`${agentActions.length} action candidates`} detail={agentActions.length ? "merchant review" : "none generated"} tone="amber" />
-            <SignalChip icon={<ShieldCheck size={14} />} label={`${verifiedOutcomes.length} verified outcome records`} detail={learningEvents.some((event) => event.learningStatus === "applied") ? "learning applied from stored facts" : verifiedOutcomes.some((outcome) => outcome.status === "failed") ? "failed outcomes require review" : "no financial outcome inferred"} tone="violet" />
-          </div>
-        </Panel>
+        <div className="absolute inset-x-0 top-[70px] bottom-[102px] z-0 sm:inset-x-6 lg:inset-x-16"><IntelligenceCore state={coreState} customers={snapshot.customers} customerStates={customerStates} onCustomerSelect={(customerId) => router.push(`/customers/${customerId}${sourceSuffix}`)} onStageSelect={setSelectedStage} /></div>
 
-        <div className="space-y-5">
-          <AiSignal signal={snapshot.signals[0]} />
-          <SystemStatus coreState={coreState} source={snapshot.source} />
+        <FloatingPanel className="left-4 top-[118px] hidden lg:block" label="Payment signal" icon={<Waves size={14} />} value={amount} detail={snapshot.metrics.currencies.length > 1 ? "per-currency, no FX conversion" : `${snapshot.metrics.transactionCount} observed payment records`} />
+        <FloatingPanel className="right-4 top-[154px] hidden lg:block" label="Customer DNA" icon={<BrainCircuit size={14} />} value={String(snapshot.metrics.customerCount)} detail={`${snapshot.metrics.recentPaymentActivity} recent payment relationship${snapshot.metrics.recentPaymentActivity === 1 ? "" : "s"}`} tone="violet" />
+        <FloatingPanel className="bottom-[146px] left-7 hidden lg:block" label="Action gate" icon={<ShieldCheck size={14} />} value={agentActions.length ? `${agentActions.length} queued` : "Human review"} detail="No autonomous financial action" tone="amber" />
+        <FloatingPanel className="bottom-[146px] right-7 hidden lg:block" label="Learning loop" icon={<Sparkles size={14} />} value={learningApplied ? "Applied" : "Waiting"} detail={verifiedOutcomes.length ? `${verifiedOutcomes.length} stored provider outcome${verifiedOutcomes.length === 1 ? "" : "s"}` : "Verified outcomes only"} tone="cyan" />
+
+        <div className="absolute inset-x-3 bottom-3 z-10 rounded-2xl border border-white/[.09] bg-[#071126]/72 p-3 backdrop-blur-xl sm:inset-x-6 sm:bottom-5 sm:p-4">
+          <IntelligenceLifecycle state={coreState} selectedStage={selectedStage.id} onSelect={setSelectedStage} />
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
-        <ActionPlanPanel
-          actions={actions}
-          selectedAction={selectedAction}
-          selectedActionId={selectedActionId}
-          onSelect={setSelectedActionId}
-          onApprove={approveSelectedAction}
-          approvalState={approvalState}
-          feedback={feedback}
-          reduceMotion={Boolean(reduceMotion)}
-        />
-        <IntelligenceFeed signals={snapshot.signals} />
+      <section className="grid gap-4 lg:grid-cols-[1.05fr_.95fr]">
+        <motion.article key={selectedStage.id} initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="holo-panel rounded-2xl p-5">
+          <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.17em] text-cyan-200">Reasoning sequence · {selectedStage.label}</p><h2 className="mt-2 text-xl font-semibold text-white">{selectedStage.detail}</h2></div><selectedStage.icon size={22} className="text-cyan-100" aria-hidden="true" /></div>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{stageExplanation(selectedStage, snapshot.source, leadSignal?.title, coreState)}</p>
+          <div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full border border-cyan-300/15 bg-cyan-300/[.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[.12em] text-cyan-100">{titleCase(coreState)}</span><span className="rounded-full border border-white/[.09] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[.12em] text-slate-400">{snapshot.source === "demo" ? "Synthetic data" : "PayPal Sandbox"}</span></div>
+        </motion.article>
+        <article className="holo-panel rounded-2xl p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.17em] text-violet-200">Intelligence status</p><h2 className="mt-2 text-xl font-semibold text-white">{leadSignal?.title ?? "No evidence-backed signal is active"}</h2></div><Activity className="text-violet-200" size={21} aria-hidden="true" /></div><p className="mt-3 text-sm leading-6 text-slate-400">{leadSignal?.impact ?? "PayPulse will not manufacture a recommendation where the available source facts do not support one."}</p><div className="mt-4 flex items-center justify-between border-t border-white/[.08] pt-4 text-xs"><span className="text-slate-500">Deterministic signals</span><span className="font-semibold text-cyan-100">{deterministicInsightCount}</span><button type="button" onClick={() => router.push(`/intelligence${sourceSuffix}`)} className="focus-ring inline-flex items-center gap-1 rounded-lg text-cyan-100 hover:text-white">Open intelligence <ArrowUpRight size={14} /></button></div></article>
       </section>
     </div>
   );
 }
 
-function formatCurrencyBreakdown(values: Readonly<Record<string, number>>): string {
-  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right));
-  if (entries.length === 0) return "—";
-  return entries.map(([currency, value]) => formatCurrency(value, currency)).join(" · ");
+function FloatingPanel({ className, label, icon, value, detail, tone = "cyan" }: { readonly className: string; readonly label: string; readonly icon: ReactNode; readonly value: string; readonly detail: string; readonly tone?: "cyan" | "violet" | "amber" }) {
+  const toneClass = { cyan: "border-cyan-300/15", violet: "border-violet-300/15", amber: "border-amber-300/15" }[tone];
+  return <div className={`holo-panel absolute z-10 w-[190px] rounded-2xl p-3.5 [animation:holo-float_7s_ease-in-out_infinite] ${toneClass} ${className}`}><p className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[.15em] text-slate-400">{icon}{label}</p><p className="mt-3 font-[family-name:var(--font-display)] text-xl font-semibold tracking-[-.04em] text-white">{value}</p><p className="mt-1 text-[11px] leading-4 text-slate-500">{detail}</p></div>;
 }
 
-function MetricRail({ snapshot }: { readonly snapshot: DashboardSnapshot }) {
-  const currency = snapshot.metrics.primaryCurrency;
-  const transactionValue =
-    currency && snapshot.metrics.totalTransactionValue !== null
-      ? formatCurrency(snapshot.metrics.totalTransactionValue, currency)
-      : formatCurrencyBreakdown(snapshot.metrics.transactionValueByCurrency);
-  const transactionValueDelta =
-    snapshot.metrics.currencies.length > 1
-      ? "Per-currency totals; no FX conversion"
-      : snapshot.metrics.revenueChangePercent === null
-        ? "actual Sandbox total"
-        : formatPercent(snapshot.metrics.revenueChangePercent);
-  const metrics = [
-    { label: "Transaction value", value: transactionValue, delta: transactionValueDelta, down: (snapshot.metrics.revenueChangePercent ?? 0) < 0, icon: ArrowDownRight },
-    { label: "Transaction count", value: String(snapshot.metrics.transactionCount), delta: `${snapshot.metrics.successfulPaymentCount} completed`, down: false, icon: Zap },
-    { label: "Customers", value: String(snapshot.metrics.customerCount), delta: `${snapshot.metrics.recentPaymentActivity} recent`, down: false, icon: ArrowUpRight },
-    { label: "Status signals", value: String(snapshot.metrics.failedCount + snapshot.metrics.pendingCount), delta: `${snapshot.metrics.pendingCount} pending`, down: snapshot.metrics.failedCount > 0, icon: CircleAlert },
-  ];
-
-  return (
-    <section aria-label="Payment intelligence metrics" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-      {metrics.map(({ label, value, delta, down, icon: Icon }) => (
-        <Panel key={label} className="p-4">
-          <div className="flex items-start justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">{label}</p>
-            <Icon size={15} className={down ? "text-rose-200" : "text-cyan-200"} aria-hidden="true" />
-          </div>
-          <p className="mt-4 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-[-0.04em] text-white">{value}</p>
-          <p className={`mt-1 text-xs ${down ? "text-rose-200" : "text-slate-400"}`}>{delta}</p>
-        </Panel>
-      ))}
-    </section>
-  );
+function CoreState({ coreState }: { readonly coreState: CoreState }) {
+  const tone = coreState === "failed" ? "text-rose-100 border-rose-300/25 bg-rose-300/10" : coreState === "approved" || coreState === "completed" || coreState === "learning" ? "text-emerald-100 border-emerald-300/25 bg-emerald-300/10" : "text-cyan-100 border-cyan-300/25 bg-cyan-300/10";
+  return <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[.13em] ${tone}`}><Gauge size={13} /> {titleCase(coreState)}</span>;
 }
 
-function AiSignal({ signal }: { readonly signal: IntelligenceSignal | undefined }) {
-  if (!signal) return null;
-
-  return (
-    <Panel className="p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
-          <Sparkles size={14} aria-hidden="true" /> AI signal detected
-        </div>
-        <StatusPill status={signal.severity} />
-      </div>
-      <h2 className="mt-5 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-[-0.04em] text-white">{signal.title}</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-400">{signal.what}</p>
-      <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/8 pt-4">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Confidence</p>
-          <p className="mt-1 text-sm font-medium text-cyan-100">{Math.round(signal.confidence * 100)}%</p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Required action</p>
-          <p className="mt-1 text-sm font-medium text-slate-200">Review plan</p>
-        </div>
-      </div>
-    </Panel>
-  );
-}
-
-function SystemStatus({ coreState, source }: { readonly coreState: CoreState; readonly source: DashboardSnapshot["source"] }) {
-  return (
-    <Panel className="p-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-          <Cpu size={14} aria-hidden="true" /> System status
-        </div>
-        <StatusPill status="online" />
-      </div>
-      <div className="mt-5 space-y-3 text-xs">
-        <SystemLine label="Intelligence core" value={titleCase(coreState)} live />
-        <SystemLine label="Data mode" value={source === "paypal_sandbox" ? "PayPal Sandbox" : "Explicit demo data"} />
-        <SystemLine label="PayPal execution" value="Capability-gated; no verified write operation" />
-      </div>
-    </Panel>
-  );
-}
-
-function SystemLine({ label, value, live = false }: { readonly label: string; readonly value: string; readonly live?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <span className={live ? "flex items-center gap-2 text-cyan-100" : "text-slate-300"}>
-        {live ? <span className="size-1.5 rounded-full bg-cyan-200 shadow-[0_0_10px_rgba(165,243,252,1)]" /> : null}
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function ActionPlanPanel({
-  actions,
-  selectedAction,
-  selectedActionId,
-  onSelect,
-  onApprove,
-  approvalState,
-  feedback,
-  reduceMotion,
-}: {
-  readonly actions: readonly ActionRecommendation[];
-  readonly selectedAction: ActionRecommendation | undefined;
-  readonly selectedActionId: string;
-  readonly onSelect: (actionId: string) => void;
-  readonly onApprove: () => Promise<void>;
-  readonly approvalState: ApprovalState;
-  readonly feedback: string;
-  readonly reduceMotion: boolean;
-}) {
-  return (
-    <Panel className="overflow-hidden p-0">
-      <div className="flex flex-col gap-3 border-b border-white/8 p-5 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
-            <CircleDashed size={14} aria-hidden="true" /> Agentic action plan
-          </div>
-          <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-[-0.04em] text-white">Review before the system acts.</h2>
-          <p className="mt-2 text-sm text-slate-400">{actions.length > 0 ? "Legacy demo actions are intentionally hidden in Phase 6." : "Generate evidence-bound candidates explicitly in the Action Command Center."}</p>
-        </div>
-        <StatusPill status="awaiting_approval" />
-      </div>
-      <div className="grid lg:grid-cols-[0.84fr_1.16fr]">
-        <div className="border-b border-white/8 p-3 lg:border-b-0 lg:border-r">
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              onClick={() => onSelect(action.id)}
-              className={`focus-ring mb-1 flex w-full items-center justify-between gap-3 rounded-xl p-3 text-left transition ${
-                selectedActionId === action.id ? "bg-cyan-300/10" : "hover:bg-white/[0.035]"
-              }`}
-            >
-              <span>
-                <span className="block text-sm font-medium text-slate-100">{action.title}</span>
-                <span className="mt-1 block text-xs text-slate-500">{action.customerIds.length} customers affected</span>
-              </span>
-              <ChevronRight size={16} className="text-slate-500" aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-        {selectedAction ? (
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex flex-wrap gap-2">
-                <StatusPill status={selectedAction.status} />
-                <span className="rounded-full border border-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Human approval required</span>
-              </div>
-              <span className="text-xs text-slate-500">{Math.round(selectedAction.confidence * 100)}% confidence</span>
-            </div>
-            <h3 className="mt-5 text-xl font-semibold tracking-[-0.03em] text-white">{selectedAction.title}</h3>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <ActionDetail label="Why" value={selectedAction.why} />
-              <ActionDetail label="What will happen" value={selectedAction.whatWillHappen} />
-              <ActionDetail label="Expected impact" value={selectedAction.expectedImpact} />
-              <ActionDetail label="Risk" value={selectedAction.risk} />
-            </div>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              {selectedAction.status === "approved" ? (
-                <div className="flex items-center gap-2 text-sm text-emerald-200">
-                  <CheckCircle2 size={17} aria-hidden="true" /> Approval recorded. Execution remains disabled until Phase 4.
-                </div>
-              ) : (
-                <motion.button
-                  type="button"
-                  className="focus-ring rounded-xl bg-cyan-200 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_0_24px_rgba(103,232,249,0.24)] transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  whileHover={reduceMotion ? undefined : { scale: 1.02 }}
-                  whileTap={reduceMotion ? undefined : { scale: 0.98 }}
-                  disabled={approvalState === "saving" || !["recommended", "awaiting_approval"].includes(selectedAction.status)}
-                  onClick={() => void onApprove()}
-                >
-                  {approvalState === "saving" ? "Recording approval…" : "Approve action"}
-                </motion.button>
-              )}
-              <span className="text-xs text-slate-500">No payment, message, or PayPal Sandbox operation will run in Phase 3.</span>
-            </div>
-            <AnimatePresence mode="wait">
-              {feedback ? (
-                <motion.p
-                  key={feedback}
-                  initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className={`mt-4 rounded-lg border px-3 py-2 text-xs ${approvalState === "error" ? "border-rose-300/20 bg-rose-300/10 text-rose-100" : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"}`}
-                  role="status"
-                >
-                  {feedback}
-                </motion.p>
-              ) : null}
-            </AnimatePresence>
-          </div>
-        ) : (
-          <div className="grid min-h-[320px] place-items-center p-8 text-center">
-            <div><ShieldCheck className="mx-auto text-violet-200" size={24} /><p className="mt-4 text-sm font-medium text-slate-200">Human approval is ready for a future action plan.</p><p className="mt-2 max-w-sm text-xs leading-5 text-slate-500">Phase 4 reads and normalizes PayPal Sandbox data only. It does not generate AI recommendations or execute actions.</p></div>
-          </div>
-        )}
-      </div>
-    </Panel>
-  );
-}
-
-function ActionDetail({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="rounded-xl border border-white/7 bg-black/10 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100">{label}</p>
-      <p className="mt-2 text-xs leading-5 text-slate-400">{value}</p>
-    </div>
-  );
-}
-
-function IntelligenceFeed({ signals }: { readonly signals: readonly IntelligenceSignal[] }) {
-  return (
-    <Panel className="p-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
-          <Sparkles size={14} aria-hidden="true" /> Intelligence events
-        </div>
-        <span className="text-xs text-slate-500">live demo stream</span>
-      </div>
-      <div className="mt-5 space-y-4">
-        {signals.map((signal, index) => (
-          <div key={signal.id} className="relative border-l border-cyan-300/20 pl-4">
-            <span className="absolute -left-[4px] top-1.5 size-2 rounded-full bg-cyan-200 shadow-[0_0_10px_rgba(165,243,252,0.8)]" />
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-medium text-slate-200">{signal.title}</p>
-              <span className="text-[10px] text-slate-500">0{index + 1}</span>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-slate-500">{signal.impact}</p>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function CoreStateLabel({ state }: { readonly state: CoreState }) {
-  const status = state === "awaiting_approval" ? "awaiting_approval"
-    : state === "approved" ? "approved"
-      : state === "executing" ? "executing"
-        : state === "completed" ? "succeeded"
-          : state === "failed" ? "failed"
-            : state === "learning" ? "learned" : "analyzing";
-  return <StatusPill status={status as ActionStatus} />;
-}
-
-function SignalChip({
-  icon,
-  label,
-  detail,
-  tone = "cyan",
-}: {
-  readonly icon: ReactNode;
-  readonly label: string;
-  readonly detail: string;
-  readonly tone?: "cyan" | "amber" | "violet";
-}) {
-  const toneClass = {
-    cyan: "border-cyan-300/10 bg-cyan-300/[0.045] text-cyan-100",
-    amber: "border-amber-300/10 bg-amber-300/[0.045] text-amber-100",
-    violet: "border-violet-300/10 bg-violet-300/[0.045] text-violet-100",
-  }[tone];
-
-  return (
-    <div className={`flex items-center gap-2 rounded-lg border p-2.5 ${toneClass}`}>
-      {icon}
-      <div>
-        <p className="text-xs font-medium">{label}</p>
-        <p className="text-[10px] opacity-65">{detail}</p>
-      </div>
-    </div>
-  );
+function stageExplanation(stage: IntelligenceStage, source: DashboardSnapshot["source"], signalTitle: string | undefined, coreState: CoreState): string {
+  const sourceLabel = source === "demo" ? "explicit synthetic demo records" : "normalized PayPal Sandbox records";
+  switch (stage.id) {
+    case "observe": return `PayPulse receives ${sourceLabel} and retains their source boundary. Browser input does not create provider facts.`;
+    case "understand": return "Payment DNA is computed from normalized, source-qualified history. Where history is insufficient, PayPulse shows that limitation instead of inferring a pattern.";
+    case "predict": return signalTitle ? `The current evidence-backed signal is “${signalTitle}.” Predictions are confidence-scoped observations, not autonomous instructions.` : "There is no evidence-backed pattern ready to predict from the current source data.";
+    case "recommend": return "Deterministic eligibility decides whether a reviewable recommendation can exist. AI explanations are separate and cannot execute actions.";
+    case "approve": return "A merchant must explicitly approve an action. Approval is recorded before any eligible Sandbox execution can be considered.";
+    case "act": return coreState === "executing" ? "A known, approved Sandbox workflow is awaiting provider-verifiable progress. No success is implied until server-side verification completes." : "Only the dedicated PayPal Sandbox verification action can create a fixed, server-configured test order.";
+    case "learn": return "Learning returns to the core only after a server-side provider verification. Unverified, failed, and unknown outcomes remain audit history without invented financial facts.";
+  }
 }

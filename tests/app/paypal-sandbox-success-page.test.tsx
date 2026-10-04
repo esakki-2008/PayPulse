@@ -36,7 +36,7 @@ describe("PayPal Sandbox success return page", () => {
     expect(markup).toContain("Sandbox Verification");
     expect(markup).toContain("Provider status");
     expect(markup).toContain("COMPLETED");
-    expect(markup).toContain("Captured / completed");
+    expect(markup).toContain("VERIFIED");
     expect(markup).toContain("Back to PayPulse 3D Command Center");
     expect(markup).toContain("not real money");
     expect(markup).not.toContain("untrusted-payer-id");

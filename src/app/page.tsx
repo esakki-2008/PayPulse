@@ -1,5 +1,5 @@
 import { CommandCenter } from "@/components/command-center/command-center";
-import { DataSourceUnavailable } from "@/components/ui/data-source-unavailable";
+import { SandboxCapabilityCommand } from "@/components/command-center/sandbox-capability-command";
 import { listActionsForSource } from "@/server/actions/engine";
 import { getOutcomeLearningRepository } from "@/server/actions/learning/repository";
 import { DataSourceError, getDashboardForSource, getIntelligenceForSource } from "@/server/data/provider";
@@ -20,7 +20,7 @@ export default async function CommandPage({ searchParams }: CommandPageProps) {
     ]);
     return <CommandCenter snapshot={dashboard.data} deterministicInsightCount={intelligence.data.insights.filter((insight) => insight.type !== "insufficient_data").length} customerStates={Object.fromEntries(intelligence.data.customerProfiles.map((profile) => [profile.customerId, profile.state]))} agentActions={agentActions} verifiedOutcomes={verifiedOutcomes} learningEvents={learningEvents} />;
   } catch (error) {
-    if (error instanceof DataSourceError) return <DataSourceUnavailable message={error.message} category={error.category} capabilities={error.capabilities} path="/" />;
+    if (error instanceof DataSourceError && source === "paypal_sandbox") return <SandboxCapabilityCommand message={error.message} />;
     throw error;
   }
 }

@@ -18,9 +18,9 @@ export default async function PayPalSandboxSuccessPage({ searchParams }: PayPalS
       <div aria-hidden="true" className="grid-noise pointer-events-none absolute inset-x-0 top-0 -z-10 h-[440px] opacity-60" />
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-200">PAYPAL SANDBOX</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-200">PAYPAL SANDBOX · PAYMENT VERIFICATION RETURNED</p>
           <h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-white">PayPulse verification return</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Sandbox Verification is informational only. This page does not capture a payment or use buyer-return values as payment evidence.</p>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Verifying Sandbox order… server-side through the PayPulse boundary. This page never captures a payment or uses buyer-return values as payment evidence.</p>
         </div>
         <span className="inline-flex w-fit items-center gap-2 rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-violet-100">
           <span className="size-1.5 rounded-full bg-current shadow-[0_0_8px_currentColor]" />
@@ -55,7 +55,7 @@ export default async function PayPalSandboxSuccessPage({ searchParams }: PayPalS
 
 function ReturnStatus({ state }: { readonly state: PayPalSandboxReturnState }) {
   if (state.kind === "known_order") {
-    const captureLabel = state.captureCompleted ? "Captured / completed" : "Not captured / completed";
+    const captureLabel = state.captureCompleted ? "VERIFIED" : "NOT VERIFIED";
     const captureTone = state.captureCompleted
       ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
       : "border-amber-300/25 bg-amber-300/10 text-amber-100";
@@ -94,7 +94,7 @@ function ReturnStatus({ state }: { readonly state: PayPalSandboxReturnState }) {
       <div className="flex items-start gap-3">
         <CircleAlert className="mt-0.5 shrink-0 text-rose-200" size={20} aria-hidden="true" />
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-100">Sandbox Verification</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-100">Sandbox Verification · NOT VERIFIED</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">{content.heading}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{content.detail}</p>
         </div>

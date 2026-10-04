@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { CoreFallback } from "./core-fallback";
+import type { IntelligenceStage } from "@/components/ui/intelligence-lifecycle";
 import type { CoreState, Customer } from "@/types/domain";
 
 const IntelligenceScene = dynamic(() => import("./intelligence-scene"), {
@@ -25,32 +26,37 @@ export function IntelligenceCore({
   customers,
   customerStates,
   onCustomerSelect,
+  onStageSelect,
 }: {
   readonly state: CoreState;
   readonly customers: readonly Customer[];
   readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>;
   readonly onCustomerSelect?: (customerId: string) => void;
+  readonly onStageSelect?: (stage: IntelligenceStage) => void;
 }) {
   const [webglAvailable, setWebglAvailable] = useState<boolean | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [compact, setCompact] = useState(false);
 
   useEffect(() => {
     setWebglAvailable(supportsWebGl());
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updatePreference = () => setReducedMotion(media.matches);
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const viewport = window.matchMedia("(max-width: 760px)");
+    const updatePreference = () => setReducedMotion(motion.matches);
+    const updateViewport = () => setCompact(viewport.matches);
     updatePreference();
-    media.addEventListener("change", updatePreference);
+    updateViewport();
+    motion.addEventListener("change", updatePreference);
+    viewport.addEventListener("change", updateViewport);
 
-    return () => media.removeEventListener("change", updatePreference);
+    return () => {
+      motion.removeEventListener("change", updatePreference);
+      viewport.removeEventListener("change", updateViewport);
+    };
   }, []);
 
-  if (webglAvailable === false || reducedMotion) {
-    return <CoreFallback state={state} reducedMotion={reducedMotion} />;
-  }
-
-  if (webglAvailable === null) {
-    return <CoreFallback state={state} />;
-  }
+  if (webglAvailable === false || reducedMotion) return <CoreFallback state={state} reducedMotion={reducedMotion} />;
+  if (webglAvailable === null) return <CoreFallback state={state} />;
 
   return (
     <IntelligenceScene
@@ -58,6 +64,8 @@ export function IntelligenceCore({
       customers={customers}
       customerStates={customerStates}
       onCustomerSelect={onCustomerSelect}
+      onStageSelect={onStageSelect}
+      compact={compact}
     />
   );
 }
