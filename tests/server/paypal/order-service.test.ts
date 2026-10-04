@@ -82,6 +82,24 @@ describe("PayPalOrderService", () => {
     await expect(service.getOrderById("5O190127TN364715T")).resolves.toMatchObject({ approvalUrl: null });
   });
 
+  it("normalizes the Orders v2 payer-action HATEOAS link for Sandbox buyer approval", async () => {
+    const service = new PayPalOrderService(
+      { getAccessToken: async () => "unit-test-token" },
+      async () => orderResponse({
+        status: "PAYER_ACTION_REQUIRED",
+        links: [
+          { href: "https://api-m.sandbox.paypal.com/v2/checkout/orders/5O190127TN364715T", rel: "self", method: "GET" },
+          { href: "https://www.sandbox.paypal.com/checkoutnow?token=5O190127TN364715T", rel: "payer-action", method: "GET" },
+        ],
+      }),
+    );
+
+    await expect(service.getOrderById("5O190127TN364715T")).resolves.toMatchObject({
+      status: "PAYER_ACTION_REQUIRED",
+      approvalUrl: expect.stringContaining("sandbox.paypal.com"),
+    });
+  });
+
   it("uses the stored known order ID and a separate deterministic capture request ID", async () => {
     const fetchImplementation = vi.fn<PayPalOrderFetch>().mockResolvedValue(orderResponse({ status: "APPROVED" }));
     const service = new PayPalOrderService({ getAccessToken: async () => "unit-test-token" }, fetchImplementation);

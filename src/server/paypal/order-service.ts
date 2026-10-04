@@ -15,7 +15,9 @@ const moneySchema = z.object({
 const linkSchema = z.object({
   href: z.string().url(),
   rel: z.string().trim().min(1),
-  method: z.string().trim().min(1),
+  // PayPal Orders v2 normally includes GET, but HATEOAS method metadata can
+  // be omitted in a minimal representation. Browser navigation is GET-only.
+  method: z.string().trim().min(1).optional(),
 });
 const captureSchema = z.object({
   id: z.string().trim().min(1),
@@ -224,7 +226,11 @@ function normalizeStatus(status: string): PayPalOrderStatus {
 }
 
 function approvalLink(links: readonly z.infer<typeof linkSchema>[]): string | null {
-  const approval = links.find((link) => (link.rel === "approve" || link.rel === "payer-action") && link.method === "GET");
+  const approval = links.find((link) => {
+    const relation = link.rel.toLowerCase();
+    const method = link.method?.toUpperCase();
+    return (relation === "approve" || relation === "payer-action") && (method === undefined || method === "GET");
+  });
   if (!approval) return null;
   try {
     const url = new URL(approval.href);
