@@ -142,11 +142,21 @@ function StageNodes({ state, compact, onStageSelect }: { readonly state: CoreSta
         <meshBasicMaterial color={nodeColor} />
       </mesh>
       <pointLight color={nodeColor} intensity={active ? 1.8 : 0.4} distance={active ? 2.6 : 1.2} />
-      {!compact || active ? <Html center distanceFactor={8} position={[0, active ? 0.43 : 0.3, 0]} style={{ pointerEvents: "auto" }}>
-        <button type="button" className={`core-stage-label ${active ? "is-active" : ""}`} onClick={() => onStageSelect?.(stage)}>
+      <Html
+        center
+        distanceFactor={8}
+        position={[0, active ? 0.43 : 0.3, 0]}
+        style={{ pointerEvents: compact && !active ? "none" : "auto" }}
+      >
+        <button
+          type="button"
+          className={`core-stage-label ${active ? "is-active" : ""} ${compact && !active ? "core-stage-label--compact-hidden" : ""}`}
+          onClick={() => onStageSelect?.(stage)}
+          tabIndex={compact && !active ? -1 : undefined}
+        >
           <span className="core-stage-label__dot" /><Icon size={10} aria-hidden="true" />{stage.label}
         </button>
-      </Html> : null}
+      </Html>
     </group>;
   })}</group>;
 }

@@ -150,6 +150,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   cursor: pointer;
 }
 .core-stage-label.is-active { border-color: rgba(103,232,249,.72); color: #e8feff; box-shadow: 0 0 16px rgba(103,232,249,.28); }
+/* Keep every Drei Html portal mounted while responsive state or active stages change.
+   Display state is visual only; conditionally mounting Html can synchronously
+   unmount its internal React root while the Canvas is rendering. */
+.core-stage-label--compact-hidden { visibility: hidden; opacity: 0; transform: scale(.92); }
 .core-stage-label__dot { width: 5px; height: 5px; border-radius: 99px; background: currentColor; box-shadow: 0 0 8px currentColor; }
 
 @keyframes orbit-border { to { transform: rotate(1turn); } }
