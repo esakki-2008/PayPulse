@@ -1,6 +1,6 @@
 "use client";
 
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -30,6 +30,16 @@ const stagePositions: readonly [number, number, number][] = [
   [3.85, -0.9, 0.15],
   [3.5, 1.85, 0.08],
   [0.55, 3.05, 0.12],
+] as const;
+
+const stageLabelPositions = [
+  "left-[5%] top-[27%]",
+  "bottom-[30%] left-[16%]",
+  "bottom-[14%] left-[36%]",
+  "bottom-[16%] left-[61%]",
+  "bottom-[31%] right-[7%]",
+  "right-[14%] top-[25%]",
+  "left-[54%] top-[12%]",
 ] as const;
 
 function CoreOrb({ state }: { readonly state: CoreState }) {
@@ -118,7 +128,7 @@ function DataFlow({ state, compact }: { readonly state: CoreState; readonly comp
   return <group>{Array.from({ length: count }, (_, index) => <mesh key={index} ref={(node) => { particles.current[index] = node; }}><sphereGeometry args={[0.05 + (index % 3) * 0.01, 10, 10]} /><meshBasicMaterial color={index % 3 === 0 ? "#c4b5fd" : "#67e8f9"} transparent opacity={0.85} /></mesh>)}</group>;
 }
 
-function StageNodes({ state, compact, onStageSelect }: { readonly state: CoreState; readonly compact: boolean; readonly onStageSelect?: (stage: IntelligenceStage) => void }) {
+function StageNodes({ state, onStageSelect }: { readonly state: CoreState; readonly onStageSelect?: (stage: IntelligenceStage) => void }) {
   const activeStage = intelligenceStageIndex(state);
   const color = stateColors[state];
 
@@ -127,7 +137,6 @@ function StageNodes({ state, compact, onStageSelect }: { readonly state: CoreSta
     const active = index === activeStage;
     const passed = index < activeStage || state === "learning";
     const nodeColor = active ? color : passed ? "#57e5c7" : "#6d85aa";
-    const Icon = stage.icon;
     return <group key={stage.id} position={position}>
       <line>
         <bufferGeometry><bufferAttribute attach="attributes-position" args={[new Float32Array([0, 0, 0, -position[0], -position[1], -position[2]]), 3]} /></bufferGeometry>
@@ -142,23 +151,33 @@ function StageNodes({ state, compact, onStageSelect }: { readonly state: CoreSta
         <meshBasicMaterial color={nodeColor} />
       </mesh>
       <pointLight color={nodeColor} intensity={active ? 1.8 : 0.4} distance={active ? 2.6 : 1.2} />
-      <Html
-        center
-        distanceFactor={8}
-        position={[0, active ? 0.43 : 0.3, 0]}
-        style={{ pointerEvents: compact && !active ? "none" : "auto" }}
-      >
-        <button
-          type="button"
-          className={`core-stage-label ${active ? "is-active" : ""} ${compact && !active ? "core-stage-label--compact-hidden" : ""}`}
-          onClick={() => onStageSelect?.(stage)}
-          tabIndex={compact && !active ? -1 : undefined}
-        >
-          <span className="core-stage-label__dot" /><Icon size={10} aria-hidden="true" />{stage.label}
-        </button>
-      </Html>
+
     </group>;
   })}</group>;
+}
+
+function IntelligenceStageLabels({ state, compact, onStageSelect }: { readonly state: CoreState; readonly compact: boolean; readonly onStageSelect?: (stage: IntelligenceStage) => void }) {
+  const activeStage = intelligenceStageIndex(state);
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10" aria-label="Interactive intelligence stages">
+      {intelligenceStages.map((stage, index) => {
+        const Icon = stage.icon;
+        const active = index === activeStage;
+        return (
+          <div key={stage.id} className={`core-stage-label-anchor ${stageLabelPositions[index]!}`}>
+            <button
+              type="button"
+              className={`core-stage-label pointer-events-auto ${active ? "is-active" : ""} ${compact && !active ? "core-stage-label--compact-hidden" : ""}`}
+              onClick={() => onStageSelect?.(stage)}
+              tabIndex={compact && !active ? -1 : undefined}
+            >
+              <span className="core-stage-label__dot" /><Icon size={10} aria-hidden="true" />{stage.label}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function CustomerNodes({ customers, customerStates, onCustomerSelect, compact }: { readonly customers: readonly Customer[]; readonly customerStates?: Readonly<Record<string, "stable" | "declining" | "growing" | "irregular" | "inactive" | "insufficient_data">>; readonly onCustomerSelect?: (customerId: string) => void; readonly compact: boolean }) {
@@ -185,11 +204,12 @@ export default function IntelligenceScene({ state, customers, customerStates, on
         <OrbitalRing radius={3.08} rotation={[0.25, 0.75, -0.5]} color="#67e8f9" speed={0.045} />
         <ParticleField compact={compact} />
         <DataFlow state={state} compact={compact} />
-        <StageNodes state={state} compact={compact} onStageSelect={onStageSelect} />
+        <StageNodes state={state} onStageSelect={onStageSelect} />
         <CustomerNodes customers={customers} customerStates={customerStates} onCustomerSelect={onCustomerSelect} compact={compact} />
         <OrbitControls enablePan={false} enableZoom={false} enableDamping dampingFactor={0.04} autoRotate autoRotateSpeed={0.25} />
       </Canvas>
-      <div className="pointer-events-none absolute inset-x-5 top-5 flex items-start justify-between text-[9px] font-semibold uppercase tracking-[0.19em] text-cyan-100/75"><span>Live intelligence field</span><span>Seven-stage loop</span></div>
+      <IntelligenceStageLabels state={state} compact={compact} onStageSelect={onStageSelect} />
+      <div className="pointer-events-none absolute inset-x-5 top-5 z-20 flex items-start justify-between text-[9px] font-semibold uppercase tracking-[0.19em] text-cyan-100/75"><span>Live intelligence field</span><span>Seven-stage loop</span></div>
       <div className="holo-scanlines absolute inset-0" aria-hidden="true" />
     </div>
   );
