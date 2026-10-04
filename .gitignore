@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.next/
+*.tsbuildinfo
+out/
+
+# Local environment files and PayPal credentials
+.env
+.env.*
+*.env
+*.env.*
+.paypal.env
+.paypal.env.*
+
+# Tracked templates may contain variable names and placeholders only.
+!.env.example
+!.env.*.example
+
+# Local deployment and editor files
+.vercel/
+.vscode/
+.idea/
+*.log
+
+# OS files
+.DS_Store

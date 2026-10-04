@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1660 1080" role="img" aria-labelledby="title desc">
+<title id="title">PayPulse system architecture</title>
+<desc id="desc">PayPulse Phase 1 architecture diagram.</desc>
+<style>
+  .title { font: 700 25px Arial, Helvetica, sans-serif; fill: #14213d; }
+  .subtitle { font: 400 14px Arial, Helvetica, sans-serif; fill: #52607a; }
+  .label { font: 700 16px Arial, Helvetica, sans-serif; fill: #14213d; }
+  .small { font: 400 13px Arial, Helvetica, sans-serif; fill: #34415c; }
+  .tiny { font: 400 11px Arial, Helvetica, sans-serif; fill: #52607a; }
+  .node { fill: #ffffff; stroke: #b9c5d8; stroke-width: 2; }
+  .source { fill: #e6f4ff; stroke: #3b82b6; stroke-width: 2; }
+  .data { fill: #edf9f1; stroke: #2d8a57; stroke-width: 2; }
+  .intelligence { fill: #f3edff; stroke: #7956bf; stroke-width: 2; }
+  .action { fill: #fff5df; stroke: #ba7b13; stroke-width: 2; }
+  .control { fill: #ffecef; stroke: #c9576b; stroke-width: 2; }
+  .line { fill: none; stroke: #65758d; stroke-width: 2; marker-end: url(#arrow); }
+  .line-soft { fill: none; stroke: #8797af; stroke-width: 1.6; marker-end: url(#arrow); }
+  .line-loop { fill: none; stroke: #7956bf; stroke-width: 2; stroke-dasharray: 7 5; marker-end: url(#arrowPurple); }
+  .state { fill: #ffffff; stroke: #65758d; stroke-width: 2; }
+  .terminal { fill: #edf9f1; stroke: #2d8a57; stroke-width: 2; }
+  .warn { fill: #fff5df; stroke: #ba7b13; stroke-width: 2; }
+  .reject { fill: #ffecef; stroke: #c9576b; stroke-width: 2; }
+</style>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#65758d"/></marker>
+  <marker id="arrowPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7956bf"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff" rx="18"/>
+
+<text x="70" y="58" class="title">PayPulse system architecture</text>
+<text x="70" y="84" class="subtitle">Provider data flows through deterministic intelligence, constrained AI, merchant approval, and a Sandbox-only execution boundary.</text>
+<rect x="600" y="116" width="460" height="90" rx="16" class="source"/><text x="830" y="151" text-anchor="middle" class="label">PayPal Sandbox</text><text x="830" y="176" text-anchor="middle" class="small">Orders, captures, transaction search, webhooks</text>
+<rect x="600" y="270" width="460" height="90" rx="16" class="node"/><text x="830" y="305" text-anchor="middle" class="label">Transaction Layer</text><text x="830" y="330" text-anchor="middle" class="small">verify • ingest • normalize • deduplicate</text>
+<rect x="600" y="424" width="460" height="90" rx="16" class="data"/><text x="830" y="459" text-anchor="middle" class="label">PostgreSQL</text><text x="830" y="484" text-anchor="middle" class="small">ledger • profiles • insights • actions • audit</text>
+<path d="M830 206 V270 M830 360 V424" class="line"/>
+<rect x="120" y="585" width="330" height="92" rx="16" class="intelligence"/><text x="285" y="620" text-anchor="middle" class="label">Payment Intelligence Layer</text><text x="285" y="645" text-anchor="middle" class="small">metrics &amp; comparisons</text>
+<rect x="520" y="585" width="330" height="92" rx="16" class="intelligence"/><text x="685" y="620" text-anchor="middle" class="label">Payment DNA Engine</text><text x="685" y="645" text-anchor="middle" class="small">baselines &amp; deviations</text>
+<rect x="920" y="585" width="280" height="92" rx="16" class="intelligence"/><text x="1060" y="620" text-anchor="middle" class="label">Signal detector</text><text x="1060" y="645" text-anchor="middle" class="small">anomaly detection</text>
+<rect x="1270" y="585" width="260" height="92" rx="16" class="intelligence"/><text x="1400" y="620" text-anchor="middle" class="label">Prediction Engine</text><text x="1400" y="645" text-anchor="middle" class="small">transparent scoring</text>
+<path d="M720 514 V550 H285 V585 M800 514 V585 M450 631 H920 M850 631 H920 M1200 631 H1270" class="line"/>
+<rect x="120" y="780" width="285" height="92" rx="16" class="intelligence"/><text x="262" y="815" text-anchor="middle" class="label">AI Intelligence Adapter</text><text x="262" y="840" text-anchor="middle" class="small">grounded explanation only</text>
+<rect x="475" y="780" width="260" height="92" rx="16" class="action"/><text x="605" y="815" text-anchor="middle" class="label">Action Engine</text><text x="605" y="840" text-anchor="middle" class="small">policy, grouping, impact</text>
+<rect x="805" y="780" width="240" height="92" rx="16" class="node"/><text x="925" y="815" text-anchor="middle" class="label">Merchant UI</text><text x="925" y="840" text-anchor="middle" class="small">command center</text>
+<rect x="1115" y="780" width="240" height="92" rx="16" class="control"/><text x="1235" y="815" text-anchor="middle" class="label">Human Approval</text><text x="1235" y="840" text-anchor="middle" class="small">explicit approval gate</text>
+<rect x="1425" y="780" width="170" height="92" rx="16" class="action"/><text x="1510" y="815" text-anchor="middle" class="label">Execution</text><text x="1510" y="840" text-anchor="middle" class="small">orchestrator</text>
+<path d="M1400 677 V730 H262 V780 M405 826 H475 M735 826 H805 M1045 826 H1115 M1355 826 H1425" class="line"/>
+<rect x="630" y="946" width="400" height="76" rx="16" class="data"/><text x="830" y="977" text-anchor="middle" class="label">Outcome &amp; Memory Processor</text><text x="830" y="999" text-anchor="middle" class="small">record result and update intelligence</text>
+<path d="M1510 872 V469 H1060 M830 514 V946 M830 946 V677 H685" class="line-soft"/>
+<path d="M1510 780 V161 H1060" class="line-soft"/>
+<text x="1090" y="148" class="tiny">approved Sandbox API operations only</text>
+<text x="1080" y="455" class="tiny">execution results</text>
+
+</svg>
