@@ -11,7 +11,7 @@ import {
 } from "../actions/engine";
 import { DataSourceError, type DataSourceResult } from "../data/provider";
 
-export function dataSourceResponse<T>(result: DataSourceResult<T>): NextResponse {
+export function dataSourceResponse<T>(result: DataSourceResult<T>, extras: Readonly<Record<string, unknown>> = {}): NextResponse {
   return NextResponse.json({
     data: result.data,
     meta: {
@@ -25,6 +25,7 @@ export function dataSourceResponse<T>(result: DataSourceResult<T>): NextResponse
           ? "PayPal Sandbox data. This is not production financial data."
           : "Explicitly selected synthetic demo data. No PayPal Sandbox transaction data was queried.",
     },
+    ...extras,
   });
 }
 

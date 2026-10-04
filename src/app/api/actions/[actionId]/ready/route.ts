@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { markReadyForExecution } from "@/server/actions/engine";
+import { markReadyForExecutionWithEvent } from "@/server/actions/engine";
 import { parseDataSource } from "@/server/data/provider";
 import { apiErrorResponse, dataSourceResponse } from "@/server/http/responses";
 
@@ -12,7 +12,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
   try {
     const [{ actionId }, body] = await Promise.all([context.params, request.json()]);
     const source = parseDataSource(new URL(request.url).searchParams.get("source") ?? undefined);
-    const action = await markReadyForExecution(source, actionId, inputSchema.parse(body).version);
-    return dataSourceResponse({ data: action, source, environment: source === "demo" ? "demo" : "sandbox", generatedAt: new Date().toISOString() });
+    const result = await markReadyForExecutionWithEvent(source, actionId, inputSchema.parse(body).version);
+    return dataSourceResponse({ data: result.action, source, environment: source === "demo" ? "demo" : "sandbox", generatedAt: new Date().toISOString() }, { auditEvent: result.event });
   } catch (error) { return apiErrorResponse(error); }
 }

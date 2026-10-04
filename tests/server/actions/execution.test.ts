@@ -38,8 +38,10 @@ class FakeActionRepository implements AgentActionRepository {
   async getAction(source: DataSource, id: string) { const value = this.actions.get(id); return value?.source === source ? value : null; }
   async saveAction(value: ActionCandidate) { this.actions.set(value.id, value); return value; }
   async listEvents(source: DataSource, id?: string) { return this.events.filter((item) => item.source === source && (!id || item.actionId === id)); }
-  async appendEvent(event: AgentActionEvent) { this.events.push(event); }
-  async transitionExecutionAction(value: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(value.id); if (!current || current.version !== value.version - 1 || current.status !== event.previousStatus) return null; this.actions.set(value.id, value); this.events.push(event); return value; }
+  async appendEvent(event: AgentActionEvent) { if (!this.events.some((item) => item.id === event.id)) this.events.push(event); }
+  async saveActionWithEventIfInactive(value: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(value.id); if (current && ["proposed", "approved", "ready_for_execution", "executing"].includes(current.status)) return { action: current, created: false }; this.actions.set(value.id, value); await this.appendEvent(event); return { action: value, created: true }; }
+  async transitionAction(value: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(value.id); if (!current || current.version !== value.version - 1 || current.status !== event.previousStatus) return null; this.actions.set(value.id, value); await this.appendEvent(event); return value; }
+  async transitionExecutionAction(value: ActionCandidate, event: AgentActionEvent) { return this.transitionAction(value, event); }
   async getPlan(): Promise<AgentActionPlan | null> { return null; }
   async findPlanByFingerprint(): Promise<AgentActionPlan | null> { return null; }
   async savePlan(plan: AgentActionPlan) { return plan; }

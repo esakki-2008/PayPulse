@@ -44,18 +44,18 @@ export async function generateActionsFromIntelligence(
       actions.push(existing);
       continue;
     }
-    const stored = await repository.saveAction(candidate);
-    await repository.appendEvent({
+    const creationEvent: AgentActionEvent = {
       id: randomUUID(),
-      actionId: stored.id,
+      actionId: candidate.id,
       previousStatus: "proposed",
       newStatus: "proposed",
       actor: "merchant",
       timestamp: new Date().toISOString(),
       reason: "New action recommendation generated from deterministic evidence.",
       source: intelligence.source,
-    });
-    actions.push(stored);
+    };
+    const stored = await repository.saveActionWithEventIfInactive(candidate, creationEvent);
+    actions.push(stored.action);
   }
   return { actions, message: null };
 }
@@ -113,10 +113,9 @@ export async function createPayPalSandboxVerificationAction(
     expiresAt,
     status: "proposed",
   };
-  const stored = await repository.saveAction(action);
-  await repository.appendEvent({
+  const stored = await repository.saveActionWithEventIfInactive(action, {
     id: randomUUID(),
-    actionId: stored.id,
+    actionId: action.id,
     previousStatus: "proposed",
     newStatus: "proposed",
     actor: "merchant",
@@ -124,7 +123,7 @@ export async function createPayPalSandboxVerificationAction(
     reason: "Merchant requested an explicit PayPal Sandbox payment verification workflow.",
     source: "paypal_sandbox",
   });
-  return stored;
+  return stored.action;
 }
 
 export async function generateActionPlanForSource(
@@ -183,13 +182,27 @@ export async function getActionPlanForSource(source: DataSource, planId: string,
   return plan ? refreshPlanStatus(plan, repository) : null;
 }
 
+export interface AgentActionTransitionResult {
+  readonly action: ActionCandidate;
+  readonly event: AgentActionEvent;
+}
+
 export async function approveAgentAction(source: DataSource, actionId: string, version: number, reason?: string, repository: AgentActionRepository = getAgentActionRepository()): Promise<ActionCandidate> {
+  return (await approveAgentActionWithEvent(source, actionId, version, reason, repository)).action;
+}
+export async function approveAgentActionWithEvent(source: DataSource, actionId: string, version: number, reason?: string, repository: AgentActionRepository = getAgentActionRepository()): Promise<AgentActionTransitionResult> {
   return transition(source, actionId, version, "approved", reason ?? "Merchant approved this action recommendation.", repository);
 }
 export async function rejectAgentAction(source: DataSource, actionId: string, version: number, reason?: string, repository: AgentActionRepository = getAgentActionRepository()): Promise<ActionCandidate> {
+  return (await rejectAgentActionWithEvent(source, actionId, version, reason, repository)).action;
+}
+export async function rejectAgentActionWithEvent(source: DataSource, actionId: string, version: number, reason?: string, repository: AgentActionRepository = getAgentActionRepository()): Promise<AgentActionTransitionResult> {
   return transition(source, actionId, version, "rejected", reason ?? "Merchant rejected this action recommendation.", repository);
 }
 export async function markReadyForExecution(source: DataSource, actionId: string, version: number, repository: AgentActionRepository = getAgentActionRepository()): Promise<ActionCandidate> {
+  return (await markReadyForExecutionWithEvent(source, actionId, version, repository)).action;
+}
+export async function markReadyForExecutionWithEvent(source: DataSource, actionId: string, version: number, repository: AgentActionRepository = getAgentActionRepository()): Promise<AgentActionTransitionResult> {
   return transition(source, actionId, version, "ready_for_execution", "Merchant marked action ready for a future execution phase.", repository);
 }
 
@@ -214,7 +227,7 @@ export async function transitionAgentActionExecution(
   return updated;
 }
 
-async function transition(source: DataSource, actionId: string, version: number, nextStatus: AgentActionStatus, reason: string, repository: AgentActionRepository): Promise<ActionCandidate> {
+async function transition(source: DataSource, actionId: string, version: number, nextStatus: AgentActionStatus, reason: string, repository: AgentActionRepository): Promise<AgentActionTransitionResult> {
   const action = await getActionForSource(source, actionId, repository);
   if (!action) throw new AgentActionNotFoundError("Action not found in the selected data source.");
   if (action.version !== version) throw new AgentActionStateError("This action changed. Review the latest version before deciding.");
@@ -223,17 +236,18 @@ async function transition(source: DataSource, actionId: string, version: number,
     ? action.status === "proposed"
     : nextStatus === "ready_for_execution" && action.status === "approved";
   if (!valid) throw new AgentActionStateError("This approval transition is not allowed.");
-  const updated = await repository.saveAction({ ...action, status: nextStatus, version: action.version + 1 });
   const event: AgentActionEvent = { id: randomUUID(), actionId, previousStatus: action.status, newStatus: nextStatus, actor: "merchant", timestamp: new Date().toISOString(), reason, source };
-  await repository.appendEvent(event);
-  return updated;
+  const updated = await repository.transitionAction({ ...action, status: nextStatus, version: action.version + 1 }, event);
+  if (!updated) throw new AgentActionStateError("This action changed. Review the latest version before deciding.");
+  return { action: updated, event };
 }
 
 async function expireIfNeeded(action: ActionCandidate, repository: AgentActionRepository, now: Date = new Date()): Promise<ActionCandidate> {
   if (["proposed", "approved", "ready_for_execution"].includes(action.status) && new Date(action.expiresAt) <= now) {
-    const expired = await repository.saveAction({ ...action, status: "expired", version: action.version + 1 });
-    await repository.appendEvent({ id: randomUUID(), actionId: action.id, previousStatus: action.status, newStatus: "expired", actor: "merchant", timestamp: new Date().toISOString(), reason: "Action validity period elapsed.", source: action.source });
-    return expired;
+    const event: AgentActionEvent = { id: randomUUID(), actionId: action.id, previousStatus: action.status, newStatus: "expired", actor: "merchant", timestamp: new Date().toISOString(), reason: "Action validity period elapsed.", source: action.source };
+    const expired = await repository.transitionAction({ ...action, status: "expired", version: action.version + 1 }, event);
+    if (expired) return expired;
+    return (await repository.getAction(action.source, action.id)) ?? action;
   }
   return action;
 }

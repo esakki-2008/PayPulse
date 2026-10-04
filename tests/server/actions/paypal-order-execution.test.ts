@@ -40,8 +40,10 @@ class FakeActionRepository implements AgentActionRepository {
   async getAction(source: DataSource, id: string) { const candidate = this.records.get(id); return candidate?.source === source ? candidate : null; }
   async saveAction(candidate: ActionCandidate) { this.records.set(candidate.id, candidate); return candidate; }
   async listEvents(source: DataSource, id?: string) { return this.events.filter((event) => event.source === source && (!id || event.actionId === id)); }
-  async appendEvent(event: AgentActionEvent) { this.events.push(event); }
-  async transitionExecutionAction(candidate: ActionCandidate, event: AgentActionEvent) { const current = this.records.get(candidate.id); if (!current || current.version !== candidate.version - 1 || current.status !== event.previousStatus) return null; this.records.set(candidate.id, candidate); this.events.push(event); return candidate; }
+  async appendEvent(event: AgentActionEvent) { if (!this.events.some((item) => item.id === event.id)) this.events.push(event); }
+  async saveActionWithEventIfInactive(candidate: ActionCandidate, event: AgentActionEvent) { const current = this.records.get(candidate.id); if (current && ["proposed", "approved", "ready_for_execution", "executing"].includes(current.status)) return { action: current, created: false }; this.records.set(candidate.id, candidate); await this.appendEvent(event); return { action: candidate, created: true }; }
+  async transitionAction(candidate: ActionCandidate, event: AgentActionEvent) { const current = this.records.get(candidate.id); if (!current || current.version !== candidate.version - 1 || current.status !== event.previousStatus) return null; this.records.set(candidate.id, candidate); await this.appendEvent(event); return candidate; }
+  async transitionExecutionAction(candidate: ActionCandidate, event: AgentActionEvent) { return this.transitionAction(candidate, event); }
   async getPlan(): Promise<AgentActionPlan | null> { return null; }
   async findPlanByFingerprint(): Promise<AgentActionPlan | null> { return null; }
   async savePlan(plan: AgentActionPlan) { return plan; }

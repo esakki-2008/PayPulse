@@ -29,12 +29,14 @@ class FakeActionRepository implements AgentActionRepository {
   async getAction(source: ActionCandidate["source"], id: string) { const action = this.actions.get(id); return action?.source === source ? action : null; }
   async saveAction(action: ActionCandidate) { this.actions.set(action.id, action); return action; }
   async listEvents(source: ActionCandidate["source"], id?: string) { return this.events.filter((event) => event.source === source && (!id || event.actionId === id)); }
-  async appendEvent(event: AgentActionEvent) { this.events.push(event); }
-  async transitionExecutionAction(action: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(action.id); if (!current || current.version !== action.version - 1 || current.status !== event.previousStatus) return null; this.actions.set(action.id, action); this.events.push(event); return action; }
+  async appendEvent(event: AgentActionEvent) { if (!this.events.some((item) => item.id === event.id)) this.events.push(event); }
+  async saveActionWithEventIfInactive(action: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(action.id); if (current && ["proposed", "approved", "ready_for_execution", "executing"].includes(current.status)) return { action: current, created: false }; this.actions.set(action.id, action); await this.appendEvent(event); return { action, created: true }; }
+  async transitionAction(action: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(action.id); if (!current || current.version !== action.version - 1 || current.status !== event.previousStatus) return null; this.actions.set(action.id, action); await this.appendEvent(event); return action; }
+  async transitionExecutionAction(action: ActionCandidate, event: AgentActionEvent) { return this.transitionAction(action, event); }
   async getPlan(source: ActionCandidate["source"], id: string) { const plan = this.plans.get(id); return plan?.source === source ? plan : null; }
   async findPlanByFingerprint(source: ActionCandidate["source"], fingerprint: string) { return [...this.plans.values()].find((plan) => plan.source === source && plan.fingerprint === fingerprint) ?? null; }
   async savePlan(plan: AgentActionPlan) { this.plans.set(plan.id, plan); return plan; }
-  async findActiveActionByFingerprint(source: ActionCandidate["source"], fingerprint: string) { return [...this.actions.values()].find((action) => action.source === source && action.fingerprint === fingerprint && ["proposed", "approved", "ready_for_execution"].includes(action.status)) ?? null; }
+  async findActiveActionByFingerprint(source: ActionCandidate["source"], fingerprint: string) { return [...this.actions.values()].find((action) => action.source === source && action.fingerprint === fingerprint && ["proposed", "approved", "ready_for_execution", "executing"].includes(action.status)) ?? null; }
 }
 
 describe("Phase 6 action engine", () => {
@@ -60,7 +62,14 @@ describe("Phase 6 action engine", () => {
       const action = await createPayPalSandboxVerificationAction(repository, new Date("2026-10-03T00:00:00.000Z"));
       expect(action).toMatchObject({ type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION", source: "paypal_sandbox", status: "proposed", customerIds: [], transactionIds: [] });
       expect(action.limitations.join(" ")).toContain("not Transaction Search");
-      expect((await createPayPalSandboxVerificationAction(repository, new Date("2026-10-03T00:01:00.000Z"))).id).toBe(action.id);
+      const concurrentPreparations = await Promise.all([
+        createPayPalSandboxVerificationAction(repository, new Date("2026-10-03T00:01:00.000Z")),
+        createPayPalSandboxVerificationAction(repository, new Date("2026-10-03T00:01:00.000Z")),
+      ]);
+      expect(concurrentPreparations.map((candidate) => candidate.id)).toEqual([action.id, action.id]);
+      const events = await repository.listEvents("paypal_sandbox", action.id);
+      expect(events).toHaveLength(1);
+      expect(new Set(events.map((event) => event.id)).size).toBe(events.length);
     } finally {
       for (const key of keys) {
         const value = previous[key];
@@ -95,6 +104,24 @@ describe("Phase 6 action engine", () => {
       expect.objectContaining({ previousStatus: "proposed", newStatus: "approved", actor: "merchant", source: "paypal_sandbox" }),
       expect.objectContaining({ previousStatus: "approved", newStatus: "ready_for_execution", actor: "merchant", source: "paypal_sandbox" }),
     ]));
+  });
+
+  it("commits only one concurrent transition and records unique audit identities", async () => {
+    const repository = new FakeActionRepository();
+    const action = buildActionCandidates(intelligence)[0]; if (!action) throw new Error("Expected candidate");
+    await repository.saveAction(action);
+
+    const attempts = await Promise.allSettled([
+      approveAgentAction("paypal_sandbox", action.id, action.version, undefined, repository),
+      approveAgentAction("paypal_sandbox", action.id, action.version, undefined, repository),
+    ]);
+
+    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+    expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
+    const events = await repository.listEvents("paypal_sandbox", action.id);
+    expect(events).toHaveLength(1);
+    expect(new Set(events.map((event) => event.id)).size).toBe(events.length);
+    expect((await repository.getAction("paypal_sandbox", action.id))?.version).toBe(action.version + 1);
   });
 
   it("supports rejection but rejects invalid source and status transitions", async () => {

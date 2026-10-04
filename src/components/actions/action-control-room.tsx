@@ -62,11 +62,11 @@ export function ActionControlRoom({ initialActions, initialEvents, intelligence,
   async function transition(action: ActionCandidate, command: "approve" | "reject" | "ready"): Promise<void> {
     try {
       const response = await fetch(`/api/actions/${action.id}/${command}${sourceQuery}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: action.version, ...(command === "reject" ? { reason: "Merchant rejected this recommendation." } : {}) }) });
-      const payload = await response.json() as { data?: ActionCandidate; error?: string };
+      const payload = await response.json() as { data?: ActionCandidate; auditEvent?: AgentActionEvent; error?: string };
       const updated = payload.data;
-      if (!response.ok || !updated) { setMessage(payload.error ?? "Action status could not be updated."); return; }
+      if (!response.ok || !updated || !payload.auditEvent) { setMessage(payload.error ?? "Action status could not be updated safely."); return; }
       setActions((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setEvents((current) => [...current, { id: `local-${updated.id}-${updated.version}`, actionId: updated.id, previousStatus: action.status, newStatus: updated.status, actor: "merchant", timestamp: new Date().toISOString(), reason: null, source }]);
+      setEvents((current) => mergeAuditEvents(current, payload.auditEvent!));
       setMessage(command === "approve" ? "Merchant approval recorded. No execution occurred." : command === "ready" ? "Action is ready for explicit Sandbox execution review." : "Merchant rejection recorded.");
     } catch { setMessage("Action status could not be updated safely."); }
   }
@@ -128,9 +128,24 @@ export function ActionControlRoom({ initialActions, initialEvents, intelligence,
 
     {lastExecution ? <ExecutionStatus execution={lastExecution} outcome={lastOutcome} learning={lastLearning} /> : null}
     <p className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[.05] px-4 py-3 text-sm text-cyan-50" role="status">{message}</p>
-    <details className="group rounded-2xl border border-white/[.1] bg-[#09142b]/62"><summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium text-slate-100"><span>Open approval & execution audit trail</span><span className="text-xs text-slate-500">{events.length} stored event{events.length === 1 ? "" : "s"}</span></summary><div className="border-t border-white/[.08] p-4">{events.length ? <div className="space-y-2">{events.slice(-10).reverse().map((event) => <div key={event.id} className="flex flex-col justify-between gap-2 rounded-xl border border-white/[.07] bg-black/10 p-3 sm:flex-row"><p className="text-sm text-slate-300">{event.reason ?? `${titleCase(event.actor)} changed an action from ${titleCase(event.previousStatus)} to ${titleCase(event.newStatus)}.`}</p><span className="shrink-0 text-xs text-slate-500">{formatTimestamp(event.timestamp)}</span></div>)}</div> : <p className="text-sm text-slate-500">No approval or execution activity has been recorded for this source.</p>}</div></details>
+    <details className="group rounded-2xl border border-white/[.1] bg-[#09142b]/62"><summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium text-slate-100"><span>Open approval & execution audit trail</span><span className="text-xs text-slate-500">{events.length} stored event{events.length === 1 ? "" : "s"}</span></summary><div className="border-t border-white/[.08] p-4">{events.length ? <div className="space-y-2">{auditEventsForRender(events.slice(-10).reverse()).map(({ event, key }) => <div key={key} className="flex flex-col justify-between gap-2 rounded-xl border border-white/[.07] bg-black/10 p-3 sm:flex-row"><p className="text-sm text-slate-300">{event.reason ?? `${titleCase(event.actor)} changed an action from ${titleCase(event.previousStatus)} to ${titleCase(event.newStatus)}.`}</p><span className="shrink-0 text-xs text-slate-500">{formatTimestamp(event.timestamp)}</span></div>)}</div> : <p className="text-sm text-slate-500">No approval or execution activity has been recorded for this source.</p>}</div></details>
     {executionPreview ? <ExecutionPreview action={executionPreview} source={source} executing={executing} onCancel={() => setExecutionPreview(null)} onExecute={() => void attemptExecution(executionPreview)} /> : null}
   </div>;
+}
+
+/** Keep the client audit stream aligned with persisted server event identities. */
+export function mergeAuditEvents(current: readonly AgentActionEvent[], incoming: AgentActionEvent): readonly AgentActionEvent[] {
+  return current.some((event) => event.id === incoming.id) ? current : [...current, incoming];
+}
+
+/** Historical duplicate IDs are rendered safely while the repository prevents new ones. */
+export function auditEventsForRender(events: readonly AgentActionEvent[]): readonly { readonly event: AgentActionEvent; readonly key: string }[] {
+  const occurrences = new Map<string, number>();
+  return events.map((event) => {
+    const seen = occurrences.get(event.id) ?? 0;
+    occurrences.set(event.id, seen + 1);
+    return { event, key: seen === 0 ? event.id : `${event.id}::duplicate-${seen}` };
+  });
 }
 
 function ActionObject({ action, className, onSelect }: { readonly action: ActionCandidate; readonly className: string; readonly onSelect: () => void }) { return <button type="button" onClick={onSelect} className={`focus-ring holo-panel absolute z-10 w-[230px] rounded-2xl p-4 text-left [animation:holo-float_7s_ease-in-out_infinite] ${className}`}><p className="text-[9px] font-semibold uppercase tracking-[.15em] text-cyan-200">Focused action object</p><p className="mt-2 text-lg font-semibold text-white">{action.title}</p><p className="mt-2 text-xs leading-5 text-slate-400">{action.summary}</p></button>; }
