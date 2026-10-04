@@ -43,7 +43,7 @@ It obtains its OAuth token through the existing shared `src/server/paypal/token-
 - Transaction Search availability and the `https://uri.paypal.com/services/reporting/search/read` permission are account/app dependent. A `403` is shown as an explicit unsupported-capability error, not as an empty or demo dataset.
 - A real local Sandbox verification recorded successful OAuth (`200`, token received), followed by a real Transaction Search request that reached PayPal and returned `403`. PayPulse classifies that result as `unsupported_capability`: OAuth is **available**, while Transaction Search is **unsupported** for this Sandbox app/account. It does not claim that transaction data was retrieved.
 - Sandbox history may be empty. A `200` response with no details is an honest, visible empty state; it is distinct from a `403` capability denial.
-- Phase 4 asks for no order detail. `src/server/paypal/order-service.ts` exists as a Phase 4 boundary/stub and deliberately throws rather than invoking an undocumented or mutation-prone order workflow.
+- Phase 4 itself asks for no order detail. Phase 9 now provides `src/server/paypal/order-service.ts` as a narrow server-only Orders v2 adapter for known PayPulse-created Sandbox orders; it is not a Transaction Search substitute or merchant-wide order workflow.
 
 ### Capability status model
 
@@ -88,7 +88,7 @@ The server-only PayPal boundary is under `src/server/paypal/`:
 - `transaction-service.ts` validates Transaction Search payloads, limits date range/page size/page count, and converts provider/network conditions to safe error categories.
 - `normalizer.ts` maps only documented reporting fields to normalized `Transaction` and payer-derived `Customer` records.
 - `data-adapter.ts` orchestrates fetch → normalize → upsert → deterministic snapshot construction.
-- `order-service.ts` documents the intentionally unavailable order-detail boundary.
+- `order-service.ts` is the Phase 9 server-only Orders v2 adapter for a stored known PayPulse-created Sandbox order; it never provides merchant-wide reporting.
 - `provider-error.ts` carries safe categories without provider bodies or credentials.
 
 A process-local single-flight cache has a **60-second** TTL. This prevents a page render/API request burst from generating repeated reporting calls. There is no browser polling. Each documented 31-day request fetches up to three pages of 100 records, and Phase 5 makes at most six sequential non-overlapping requests to cover its 180-day evidence horizon. It never follows an unbounded page stream. Each displayed snapshot is built from that bounded current provider response, rather than treating older durable records as current-reporting-window data.

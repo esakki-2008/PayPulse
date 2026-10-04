@@ -88,6 +88,7 @@ export async function executeApprovedPayPalSandboxAction(
       "executing",
       "Merchant approved a fixed PayPal Sandbox verification order. Awaiting provider order creation.",
       actionRepository,
+      dependencies.now,
     );
     const created = await (dependencies.orderService ?? new PayPalOrderService()).createVerificationOrder({
       actionId: action.id,
@@ -132,7 +133,7 @@ export async function executeApprovedPayPalSandboxAction(
     });
     const latest = await actionRepository.getAction("paypal_sandbox", action.id) ?? action;
     const terminalAction = latest.status === "executing"
-      ? await transitionAgentActionExecution(latest, "failed", "PayPal Sandbox order creation did not receive a verified provider result.", actionRepository)
+      ? await transitionAgentActionExecution(latest, "failed", "PayPal Sandbox order creation did not receive a verified provider result.", actionRepository, dependencies.now)
       : latest;
     return { outcome, action: terminalAction, executionOccurred: false, idempotent: false, status: failure.status, approvalUrl: null, buyerApprovalRequired: false, learning: null };
   }
@@ -218,10 +219,10 @@ export async function completeApprovedPayPalSandboxAction(
       executionId: failedExecution.executionId,
       timestamp: failedExecution.timestamp,
     }, { actionRepository, executionRepository, outcomeRepository: learningRepository });
-    const failedAction = await transitionAgentActionExecution(action, "failed", "PayPal Sandbox verification failed without a confirmed payment.", actionRepository);
+    const failedAction = await transitionAgentActionExecution(action, "failed", "PayPal Sandbox verification failed without a confirmed payment.", actionRepository, dependencies.now);
     return { outcome: failedExecution, action: failedAction, executionOccurred: true, idempotent: false, status: failure.status, approvalUrl: null, buyerApprovalRequired: false, learning };
   }
-  return persistVerifiedOrder(order, execution, action, actionRepository, executionRepository, learningRepository);
+  return persistVerifiedOrder(order, execution, action, actionRepository, executionRepository, learningRepository, dependencies.now);
 }
 
 async function persistVerifiedOrder(
@@ -231,6 +232,7 @@ async function persistVerifiedOrder(
   actionRepository: AgentActionRepository,
   executionRepository: ExecutionOutcomeRepository,
   learningRepository: OutcomeLearningRepository,
+  now?: Date,
 ): Promise<ExecutionResult> {
   const verified = verifyPayPalSandboxOrder(order);
   if (verified.status === "succeeded") {
@@ -246,7 +248,7 @@ async function persistVerifiedOrder(
       verifiedFacts: verified.verifiedFacts, failureCategory: null, limitations: verified.limitations,
       executionId: succeededExecution.executionId, timestamp: verified.timestamp,
     }, { actionRepository, executionRepository, outcomeRepository: learningRepository });
-    const succeededAction = await transitionAgentActionExecution(action, "succeeded", "PayPal Sandbox completed capture was retrieved and verified server-side.", actionRepository);
+    const succeededAction = await transitionAgentActionExecution(action, "succeeded", "PayPal Sandbox completed capture was retrieved and verified server-side.", actionRepository, now);
     return { outcome: succeededExecution, action: succeededAction, executionOccurred: true, idempotent: false, status: 200, approvalUrl: null, buyerApprovalRequired: false, learning };
   }
   if (verified.status === "failed") {
@@ -260,7 +262,7 @@ async function persistVerifiedOrder(
       verifiedFacts: verified.verifiedFacts, failureCategory: verified.failureCategory, limitations: verified.limitations,
       executionId: failedExecution.executionId, timestamp: verified.timestamp,
     }, { actionRepository, executionRepository, outcomeRepository: learningRepository });
-    const failedAction = await transitionAgentActionExecution(action, "failed", "PayPal Sandbox did not confirm a completed capture.", actionRepository);
+    const failedAction = await transitionAgentActionExecution(action, "failed", "PayPal Sandbox did not confirm a completed capture.", actionRepository, now);
     return { outcome: failedExecution, action: failedAction, executionOccurred: true, idempotent: false, status: 409, approvalUrl: null, buyerApprovalRequired: false, learning };
   }
 
@@ -310,7 +312,7 @@ async function loadActionForExecution(actionId: string, repository: AgentActionR
   if (!storedAction) throw new AgentActionNotFoundError("Action not found in the selected data source.");
   const action = new Date(storedAction.expiresAt) <= (now ?? new Date())
     ? storedAction
-    : await getActionForSource("paypal_sandbox", actionId, repository);
+    : await getActionForSource("paypal_sandbox", actionId, repository, now);
   if (!action) throw new AgentActionNotFoundError("Action not found in the selected data source.");
   return action;
 }

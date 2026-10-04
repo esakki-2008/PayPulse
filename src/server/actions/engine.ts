@@ -169,9 +169,14 @@ export async function listActionsForSource(source: DataSource, repository: Agent
 export async function listActionEventsForSource(source: DataSource, repository: AgentActionRepository = getAgentActionRepository()): Promise<readonly AgentActionEvent[]> {
   return repository.listEvents(source);
 }
-export async function getActionForSource(source: DataSource, actionId: string, repository: AgentActionRepository = getAgentActionRepository()): Promise<ActionCandidate | null> {
+export async function getActionForSource(
+  source: DataSource,
+  actionId: string,
+  repository: AgentActionRepository = getAgentActionRepository(),
+  now?: Date,
+): Promise<ActionCandidate | null> {
   const action = await repository.getAction(source, actionId);
-  return action ? expireIfNeeded(action, repository) : null;
+  return action ? expireIfNeeded(action, repository, now) : null;
 }
 export async function getActionPlanForSource(source: DataSource, planId: string, repository: AgentActionRepository = getAgentActionRepository()): Promise<AgentActionPlan | null> {
   const plan = await repository.getPlan(source, planId);
@@ -194,8 +199,9 @@ export async function transitionAgentActionExecution(
   nextStatus: "executing" | "succeeded" | "failed",
   reason: string,
   repository: AgentActionRepository = getAgentActionRepository(),
+  now?: Date,
 ): Promise<ActionCandidate> {
-  const current = await getActionForSource(action.source, action.id, repository);
+  const current = await getActionForSource(action.source, action.id, repository, now);
   if (!current) throw new AgentActionNotFoundError("Action not found in the selected data source.");
   if (current.version !== action.version) throw new AgentActionStateError("This action changed during execution. No further operation was attempted.");
   const valid = (nextStatus === "executing" && current.status === "ready_for_execution")
@@ -223,8 +229,8 @@ async function transition(source: DataSource, actionId: string, version: number,
   return updated;
 }
 
-async function expireIfNeeded(action: ActionCandidate, repository: AgentActionRepository): Promise<ActionCandidate> {
-  if (["proposed", "approved", "ready_for_execution"].includes(action.status) && new Date(action.expiresAt) <= new Date()) {
+async function expireIfNeeded(action: ActionCandidate, repository: AgentActionRepository, now: Date = new Date()): Promise<ActionCandidate> {
+  if (["proposed", "approved", "ready_for_execution"].includes(action.status) && new Date(action.expiresAt) <= now) {
     const expired = await repository.saveAction({ ...action, status: "expired", version: action.version + 1 });
     await repository.appendEvent({ id: randomUUID(), actionId: action.id, previousStatus: action.status, newStatus: "expired", actor: "merchant", timestamp: new Date().toISOString(), reason: "Action validity period elapsed.", source: action.source });
     return expired;
