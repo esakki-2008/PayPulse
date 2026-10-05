@@ -1,6 +1,8 @@
 import { ActionControlRoom } from "@/components/actions/action-control-room";
 import { listActionEventsForSource, listActionsForSource } from "@/server/actions/engine";
+import { getAgentActionRepository } from "@/server/actions/repository";
 import { getOutcomeLearningRepository } from "@/server/actions/learning/repository";
+import { requirePageActor } from "@/server/auth/page";
 import { DataSourceError, getIntelligenceForSource } from "@/server/data/provider";
 import { dataSourceFromSearchParams } from "@/server/data/page-source";
 import type { DataSource, DeterministicIntelligence } from "@/types/domain";
@@ -9,11 +11,12 @@ interface ActionsPageProps { readonly searchParams: Promise<{ source?: string | 
 
 /** The action flow stays available even when optional merchant-wide reporting is not. */
 export default async function ActionsPage({ searchParams }: ActionsPageProps) {
-  const source = await dataSourceFromSearchParams(searchParams);
-  const outcomes = getOutcomeLearningRepository();
+  const [source, actor] = await Promise.all([dataSourceFromSearchParams(searchParams), requirePageActor()]);
+  const actionsRepository = getAgentActionRepository(actor.merchantId);
+  const outcomes = getOutcomeLearningRepository(actor.merchantId);
   const [actions, events, verifiedOutcomes, learningEvents] = await Promise.all([
-    listActionsForSource(source),
-    listActionEventsForSource(source),
+    listActionsForSource(source, actionsRepository),
+    listActionEventsForSource(source, actionsRepository),
     outcomes.listOutcomes(source),
     outcomes.listLearningEvents(source),
   ]);
@@ -21,7 +24,7 @@ export default async function ActionsPage({ searchParams }: ActionsPageProps) {
   let intelligence: DeterministicIntelligence;
   let reportingNotice: string | null = null;
   try {
-    intelligence = (await getIntelligenceForSource(source)).data;
+    intelligence = (await getIntelligenceForSource(source, actor.merchantId)).data;
   } catch (error) {
     if (!(error instanceof DataSourceError)) throw error;
     intelligence = emptyIntelligence(source);

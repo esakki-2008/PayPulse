@@ -4,6 +4,12 @@
 
 PayPulse is an AI Payment Intelligence & Action Agent for the PayPal AI Hackathon. It turns merchant payment behavior into explainable **Payment DNA**, prioritizes meaningful change, and prepares human-approved next actions.
 
+## Current status — Code hardening complete; external verification remains
+
+PayPulse now fails closed for authentication and persistence: production requires PostgreSQL and a real external identity-provider adapter. This checkout intentionally provides the adapter seam but **does not ship a fabricated external-auth adapter**, so production readiness stays false until one is integrated and independently deployed. Local development is explicit: set `PAYPULSE_AUTH_MODE=development`, `PAYPULSE_PERSISTENCE=memory`, and a server-only `PAYPULSE_DEV_AUTH_TOKEN`; then enter that token only in the local-development access screen. Development sessions are signed, HttpOnly, SameSite=Strict, and disabled in production.
+
+All merchant data, actions, executions, outcomes, and learning records are repository-scoped by authenticated merchant. API bodies are bounded and schema-validated, request IDs are propagated, security headers are enabled, and a process-local rate guard complements (but does not replace) a deployment gateway rate limit.
+
 ## Current status — Phase 9 PayPal Sandbox Verification
 
 The immersive 3D Command Center connects normalized, read-only **PayPal Sandbox** intelligence to evidence-bound action recommendations with explicit `paypal_sandbox` provenance. Demo remains an explicit `?source=demo` mode, is never mixed with Sandbox data, and has execution disabled.
@@ -60,3 +66,13 @@ npm run build
 ```
 
 The credential-backed Sandbox connectivity test runs only when the local developer environment has been securely configured; it never requires credentials in Git, the UI, or chat.
+
+## Deployment and operations
+
+1. Provision PostgreSQL and apply versioned migrations with `npm run db:migrate` (alias: `npm run migrate`; the runner does not print `DATABASE_URL`).
+2. Configure a genuine external identity-provider adapter before production deployment. `PAYPULSE_AUTH_MODE=external` alone is deliberately insufficient; `/ready` reports `external_auth_adapter_unavailable` until an adapter exists.
+3. Put HTTPS, a shared/routing-aware rate limit, structured request-ID log correlation, and secret management in front of the application. The in-process guard is only a local safety layer.
+4. Use `/api/health` for liveness and `/api/readiness` for deployment readiness (`/health` and `/ready` remain compatibility paths). Readiness reports sanitized application, database, PayPal Orders configuration, and unverified-reporting checks; it never emits credentials or raw provider responses.
+5. Configure only PayPal **Sandbox** credentials and run `npm run verify:paypal-sandbox` from the secured deployment environment. Transaction Search may remain unavailable (`403`) even with valid OAuth; PayPulse must present that as an unsupported reporting capability, not empty history.
+
+**CODE HARDENING COMPLETE — EXTERNAL VERIFICATION REMAINS.** A real identity-provider adapter, a deployed PostgreSQL instance/migration run, credential-gated Sandbox verification, and target-browser/GPU checks were not performed by this repository pass.

@@ -9,6 +9,7 @@ import {
   getTransactionsForSource,
 } from "@/server/data/provider";
 import { dataSourceFromSearchParams } from "@/server/data/page-source";
+import { requirePageActor } from "@/server/auth/page";
 
 interface CustomerPageProps {
   readonly params: Promise<{ customerId: string }>;
@@ -16,12 +17,12 @@ interface CustomerPageProps {
 }
 
 export default async function CustomerPage({ params, searchParams }: CustomerPageProps) {
-  const [{ customerId }, source] = await Promise.all([params, dataSourceFromSearchParams(searchParams)]);
+  const [{ customerId }, source, actor] = await Promise.all([params, dataSourceFromSearchParams(searchParams), requirePageActor()]);
   try {
     const [customerResult, transactionsResult, intelligenceResult] = await Promise.all([
-      getCustomerForSource(source, customerId),
-      getTransactionsForSource(source),
-      getIntelligenceForSource(source),
+      getCustomerForSource(source, customerId, actor.merchantId),
+      getTransactionsForSource(source, actor.merchantId),
+      getIntelligenceForSource(source, actor.merchantId),
     ]);
     if (!customerResult.data) notFound();
     const profile = intelligenceResult.data.customerProfiles.find((candidate) => candidate.customerId === customerId);

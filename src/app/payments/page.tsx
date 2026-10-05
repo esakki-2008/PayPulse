@@ -5,16 +5,17 @@ import {
   getDashboardForSource,
 } from "@/server/data/provider";
 import { dataSourceFromSearchParams } from "@/server/data/page-source";
+import { requirePageActor } from "@/server/auth/page";
 
 interface PaymentsPageProps {
   readonly searchParams: Promise<{ source?: string | string[] }>;
 }
 
 export default async function PaymentsPage({ searchParams }: PaymentsPageProps) {
-  const source = await dataSourceFromSearchParams(searchParams);
+  const [source, actor] = await Promise.all([dataSourceFromSearchParams(searchParams), requirePageActor()]);
 
   try {
-    const result = await getDashboardForSource(source);
+    const result = await getDashboardForSource(source, actor.merchantId);
     return <PaymentUniverse snapshot={result.data} />;
   } catch (error) {
     if (error instanceof DataSourceError) {

@@ -7,6 +7,7 @@ import {
   approveAgentAction,
   createPayPalSandboxVerificationAction,
   generateActionPlanFromIntelligence,
+  generateActionsFromIntelligence,
   getActionForSource,
   markReadyForExecution,
   rejectAgentAction,
@@ -30,13 +31,13 @@ class FakeActionRepository implements AgentActionRepository {
   async saveAction(action: ActionCandidate) { this.actions.set(action.id, action); return action; }
   async listEvents(source: ActionCandidate["source"], id?: string) { return this.events.filter((event) => event.source === source && (!id || event.actionId === id)); }
   async appendEvent(event: AgentActionEvent) { if (!this.events.some((item) => item.id === event.id)) this.events.push(event); }
-  async saveActionWithEventIfInactive(action: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(action.id); if (current && ["proposed", "approved", "ready_for_execution", "executing"].includes(current.status)) return { action: current, created: false }; this.actions.set(action.id, action); await this.appendEvent(event); return { action, created: true }; }
+  async saveActionWithEventIfInactive(action: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(action.id); if (current && ["proposed", "approved", "ready_for_execution", "executing", "unknown"].includes(current.status)) return { action: current, created: false }; this.actions.set(action.id, action); await this.appendEvent(event); return { action, created: true }; }
   async transitionAction(action: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(action.id); if (!current || current.version !== action.version - 1 || current.status !== event.previousStatus) return null; this.actions.set(action.id, action); await this.appendEvent(event); return action; }
   async transitionExecutionAction(action: ActionCandidate, event: AgentActionEvent) { return this.transitionAction(action, event); }
   async getPlan(source: ActionCandidate["source"], id: string) { const plan = this.plans.get(id); return plan?.source === source ? plan : null; }
   async findPlanByFingerprint(source: ActionCandidate["source"], fingerprint: string) { return [...this.plans.values()].find((plan) => plan.source === source && plan.fingerprint === fingerprint) ?? null; }
   async savePlan(plan: AgentActionPlan) { this.plans.set(plan.id, plan); return plan; }
-  async findActiveActionByFingerprint(source: ActionCandidate["source"], fingerprint: string) { return [...this.actions.values()].find((action) => action.source === source && action.fingerprint === fingerprint && ["proposed", "approved", "ready_for_execution", "executing"].includes(action.status)) ?? null; }
+  async findActiveActionByFingerprint(source: ActionCandidate["source"], fingerprint: string) { return [...this.actions.values()].find((action) => action.source === source && action.fingerprint === fingerprint && ["proposed", "approved", "ready_for_execution", "executing", "unknown"].includes(action.status)) ?? null; }
 }
 
 describe("Phase 6 action engine", () => {
@@ -92,6 +93,20 @@ describe("Phase 6 action engine", () => {
     expect(await repository.listActions("paypal_sandbox")).toHaveLength(1);
   });
 
+  it("allocates a new merchant-namespaced attempt after a terminal lifecycle without overwriting audit history", async () => {
+    const repository = new FakeActionRepository();
+    const first = (await generateActionsFromIntelligence(intelligence, repository, "merchant-alpha")).actions[0];
+    if (!first) throw new Error("Expected first candidate");
+    await repository.saveAction({ ...first, status: "failed", version: 2 });
+    const retry = (await generateActionsFromIntelligence(intelligence, repository, "merchant-alpha")).actions[0];
+    if (!retry) throw new Error("Expected retry candidate");
+    const otherMerchant = (await generateActionsFromIntelligence(intelligence, new FakeActionRepository(), "merchant-beta")).actions[0];
+    expect(retry).toMatchObject({ attempt: 2, status: "proposed" });
+    expect(retry.id).not.toBe(first.id);
+    expect(otherMerchant?.id).not.toBe(first.id);
+    expect(await repository.listActions("paypal_sandbox")).toHaveLength(2);
+  });
+
   it("enforces proposed → approved → ready and records source-qualified merchant audit events", async () => {
     const repository = new FakeActionRepository();
     const action = buildActionCandidates(intelligence)[0]; if (!action) throw new Error("Expected candidate");
@@ -140,20 +155,20 @@ describe("Phase 6 action engine", () => {
   });
 
   it("rejects browser-supplied financial and provider facts at Sandbox-only routes", async () => {
-    const create = await createSandboxAction(new Request("http://localhost/api/actions/sandbox-verification", { method: "POST", body: JSON.stringify({ amount: "999.00", currency: "USD", providerStatus: "COMPLETED" }) }));
+    const create = await createSandboxAction(new Request("http://localhost/api/actions/sandbox-verification", { method: "POST", headers: { "x-paypulse-test-auth": "owner" }, body: JSON.stringify({ amount: "999.00", currency: "USD", providerStatus: "COMPLETED" }) }));
     expect(create.status).toBe(400);
-    await expect(create.json()).resolves.toMatchObject({ error: "Sandbox verification creation accepts no browser financial or provider facts." });
+    await expect(create.json()).resolves.toMatchObject({ code: "INVALID_REQUEST" });
     const complete = await completeSandboxAction(
-      new Request("http://localhost/api/actions/action-one/execute/complete", { method: "POST", body: JSON.stringify({ orderId: "browser-order", captureId: "browser-capture", status: "COMPLETED" }) }),
+      new Request("http://localhost/api/actions/action-one/execute/complete", { method: "POST", headers: { "x-paypulse-test-auth": "owner" }, body: JSON.stringify({ orderId: "browser-order", captureId: "browser-capture", status: "COMPLETED" }) }),
       { params: Promise.resolve({ actionId: "action-one" }) },
     );
     expect(complete.status).toBe(400);
-    await expect(complete.json()).resolves.toMatchObject({ error: "Sandbox completion accepts no browser financial or provider facts." });
+    await expect(complete.json()).resolves.toMatchObject({ code: "INVALID_REQUEST" });
   });
 
   it("keeps Demo execution disabled and isolated from PayPal Sandbox", async () => {
     const response = await executeAction(
-      new Request("http://localhost/api/actions/action-one/execute?source=demo", { method: "POST", body: "{}" }),
+      new Request("http://localhost/api/actions/action-one/execute?source=demo", { method: "POST", headers: { "x-paypulse-test-auth": "owner" }, body: "{}" }),
       { params: Promise.resolve({ actionId: "action-one" }) },
     );
     expect(response.status).toBe(501);

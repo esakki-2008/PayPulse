@@ -1,5 +1,5 @@
-import { getAgentActionRepository, type AgentActionRepository } from "../actions/repository";
-import { getExecutionOutcomeRepository, type ExecutionOutcomeRepository } from "../actions/execution/outcome";
+import type { AgentActionRepository } from "../actions/repository";
+import type { ExecutionOutcomeRepository } from "../actions/execution/outcome";
 
 import {
   isCompletedSandboxCapture,
@@ -22,24 +22,24 @@ export type PayPalSandboxReturnState =
   };
 
 /**
- * Resolves only an order that PayPulse previously created and persisted against
- * an explicit Sandbox verification action. The browser return token is an order
- * locator, not provider evidence and never authorizes a capture.
+ * Server-only legacy helper for an already authenticated, merchant-scoped
+ * caller. It is intentionally not used by the browser return page: a return
+ * token is a locator, never provider evidence and never capture authority.
  */
 export async function getPayPalSandboxReturnState(
   returnToken: string | null,
   dependencies: {
-    readonly actionRepository?: Pick<AgentActionRepository, "listActions">;
-    readonly executionRepository?: Pick<ExecutionOutcomeRepository, "listByActionId">;
+    readonly actionRepository: Pick<AgentActionRepository, "listActions">;
+    readonly executionRepository: Pick<ExecutionOutcomeRepository, "listByActionId">;
     readonly orderService?: Pick<PayPalOrderGateway, "getOrderById">;
-  } = {},
+  },
 ): Promise<PayPalSandboxReturnState> {
   if (!returnToken) return { kind: "missing_token" };
   const orderId = returnToken.trim();
   if (!paypalOrderIdPattern.test(orderId)) return { kind: "invalid_order" };
 
-  const actionRepository = dependencies.actionRepository ?? getAgentActionRepository();
-  const executionRepository = dependencies.executionRepository ?? getExecutionOutcomeRepository();
+  const actionRepository = dependencies.actionRepository;
+  const executionRepository = dependencies.executionRepository;
   const actions = await actionRepository.listActions("paypal_sandbox");
   const verificationActions = actions.filter((action) => action.type === "PAYPAL_SANDBOX_PAYMENT_VERIFICATION");
   const executions = await Promise.all(verificationActions.map((action) => executionRepository.listByActionId(action.id)));

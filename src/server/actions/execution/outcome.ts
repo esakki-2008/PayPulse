@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { getPostgresPool, toSqlExecutor, type SqlExecutor } from "../../database/postgres-client";
+import { assertPersistenceConfigured, canUseMemoryPersistence } from "../../runtime-config";
 import type { ExecutionOutcome, ExecutionOutcomeStatus } from "@/types/domain";
 
 export interface ExecutionOutcomeRepository {
@@ -133,15 +134,20 @@ function toOutcome(row: ExecutionRow): ExecutionOutcome {
   };
 }
 
-const memoryStore = globalThis as typeof globalThis & { payPulseExecutionOutcomeRepository?: MemoryExecutionOutcomeRepository };
+const memoryStore = globalThis as typeof globalThis & { payPulseExecutionOutcomeRepositories?: Map<string, MemoryExecutionOutcomeRepository> };
 
-export function getExecutionOutcomeRepository(): ExecutionOutcomeRepository {
+export function getExecutionOutcomeRepository(merchantId?: string): ExecutionOutcomeRepository {
+  const resolvedMerchantId = merchantId ?? (process.env.PAYPULSE_MERCHANT_ID?.trim() || "paypal-sandbox-default");
   if (process.env.DATABASE_URL?.trim()) {
-    return new PostgresExecutionOutcomeRepository(
-      toSqlExecutor(getPostgresPool()),
-      process.env.PAYPULSE_MERCHANT_ID?.trim() || "paypal-sandbox-default",
-    );
+    return new PostgresExecutionOutcomeRepository(toSqlExecutor(getPostgresPool()), resolvedMerchantId);
   }
-  memoryStore.payPulseExecutionOutcomeRepository ??= new MemoryExecutionOutcomeRepository();
-  return memoryStore.payPulseExecutionOutcomeRepository;
+  assertPersistenceConfigured();
+  if (!canUseMemoryPersistence()) throw new Error("Memory persistence was not explicitly enabled.");
+  const repositories = memoryStore.payPulseExecutionOutcomeRepositories ??= new Map();
+  let repository = repositories.get(resolvedMerchantId);
+  if (!repository) {
+    repository = new MemoryExecutionOutcomeRepository();
+    repositories.set(resolvedMerchantId, repository);
+  }
+  return repository;
 }

@@ -1,4 +1,5 @@
 import { getPostgresPool, toSqlExecutor, type SqlExecutor } from "../database/postgres-client";
+import { assertPersistenceConfigured, canUseMemoryPersistence } from "../runtime-config";
 import type {
   ActionCandidate,
   AgentActionEvent,
@@ -72,6 +73,11 @@ export class MemoryAgentActionRepository implements AgentActionRepository {
   async findActiveActionByFingerprint(source: DataSource, fingerprint: string): Promise<ActionCandidate | null> {
     return [...this.actions.values()].find((action) => action.source === source && action.fingerprint === fingerprint && isActiveActionStatus(action.status)) ?? null;
   }
+  async findLatestActionByFingerprint(source: DataSource, fingerprint: string): Promise<ActionCandidate | null> {
+    return [...this.actions.values()]
+      .filter((action) => action.source === source && action.fingerprint === fingerprint)
+      .sort((left, right) => right.attempt - left.attempt || right.createdAt.localeCompare(left.createdAt))[0] ?? null;
+  }
 }
 
 export class PostgresAgentActionRepository implements AgentActionRepository {
@@ -89,15 +95,15 @@ export class PostgresAgentActionRepository implements AgentActionRepository {
   }
   async saveAction(action: ActionCandidate): Promise<ActionCandidate> {
     await this.ensureMerchant();
-    await this.sql.query(`INSERT INTO actions (id, merchant_id, payload, status, version) VALUES ($1, $2, $3::jsonb, $4, $5) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, status = EXCLUDED.status, version = EXCLUDED.version, updated_at = NOW()`, [action.id, this.merchantId, JSON.stringify(action), action.status, action.version]);
+    await this.sql.query(`INSERT INTO actions (id, merchant_id, payload, status, version) VALUES ($1, $2, $3::jsonb, $4, $5) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, status = EXCLUDED.status, version = EXCLUDED.version, updated_at = NOW() WHERE actions.merchant_id = $2`, [action.id, this.merchantId, JSON.stringify(action), action.status, action.version]);
     return action;
   }
   async listEvents(source: DataSource, actionId?: string): Promise<readonly AgentActionEvent[]> {
-    const result = await this.sql.query<{ payload: AgentActionEvent | string }>(`SELECT payload FROM action_events WHERE ($1::text IS NULL OR action_id = $1) AND payload->>'source' = $2 ORDER BY created_at ASC`, [actionId ?? null, source]);
+    const result = await this.sql.query<{ payload: AgentActionEvent | string }>(`SELECT event.payload FROM action_events AS event JOIN actions AS action ON action.id = event.action_id WHERE action.merchant_id = $1 AND ($2::text IS NULL OR event.action_id = $2) AND event.payload->>'source' = $3 ORDER BY event.created_at ASC`, [this.merchantId, actionId ?? null, source]);
     return result.rows.map((row) => parsePayload<AgentActionEvent>(row.payload));
   }
   async appendEvent(event: AgentActionEvent): Promise<void> {
-    await this.sql.query(`INSERT INTO action_events (id, action_id, payload) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO NOTHING`, [event.id, event.actionId, JSON.stringify(event)]);
+    await this.sql.query(`INSERT INTO action_events (id, action_id, payload) SELECT $1, action.id, $3::jsonb FROM actions AS action WHERE action.id = $2 AND action.merchant_id = $4 ON CONFLICT (id) DO NOTHING`, [event.id, event.actionId, JSON.stringify(event), this.merchantId]);
   }
   async saveActionWithEventIfInactive(action: ActionCandidate, event: AgentActionEvent): Promise<{ readonly action: ActionCandidate; readonly created: boolean }> {
     await this.ensureMerchant();
@@ -106,7 +112,7 @@ export class PostgresAgentActionRepository implements AgentActionRepository {
       VALUES ($1, $2, $3::jsonb, $4, $5)
       ON CONFLICT (id) DO UPDATE
         SET payload = EXCLUDED.payload, status = EXCLUDED.status, version = EXCLUDED.version, updated_at = NOW()
-        WHERE actions.merchant_id = $2 AND actions.status NOT IN ('proposed', 'approved', 'ready_for_execution', 'executing')
+        WHERE actions.merchant_id = $2 AND actions.status NOT IN ('proposed', 'approved', 'ready_for_execution', 'executing', 'unknown')
       RETURNING payload, TRUE AS created
     ), recorded AS (
       INSERT INTO action_events (id, action_id, payload)
@@ -156,19 +162,31 @@ export class PostgresAgentActionRepository implements AgentActionRepository {
     return plan;
   }
   async findActiveActionByFingerprint(source: DataSource, fingerprint: string): Promise<ActionCandidate | null> {
-    const result = await this.sql.query<{ payload: ActionCandidate | string }>(`SELECT payload FROM actions WHERE merchant_id = $1 AND payload->>'source' = $2 AND payload->>'fingerprint' = $3 AND status IN ('proposed', 'approved', 'ready_for_execution', 'executing') LIMIT 1`, [this.merchantId, source, fingerprint]);
+    const result = await this.sql.query<{ payload: ActionCandidate | string }>(`SELECT payload FROM actions WHERE merchant_id = $1 AND payload->>'source' = $2 AND payload->>'fingerprint' = $3 AND status IN ('proposed', 'approved', 'ready_for_execution', 'executing', 'unknown') ORDER BY created_at DESC LIMIT 1`, [this.merchantId, source, fingerprint]);
+    return result.rows[0] ? parsePayload<ActionCandidate>(result.rows[0].payload) : null;
+  }
+  async findLatestActionByFingerprint(source: DataSource, fingerprint: string): Promise<ActionCandidate | null> {
+    const result = await this.sql.query<{ payload: ActionCandidate | string }>(`SELECT payload FROM actions WHERE merchant_id = $1 AND payload->>'source' = $2 AND payload->>'fingerprint' = $3 ORDER BY created_at DESC LIMIT 1`, [this.merchantId, source, fingerprint]);
     return result.rows[0] ? parsePayload<ActionCandidate>(result.rows[0].payload) : null;
   }
 }
 
 function isActiveActionStatus(status: ActionCandidate["status"]): boolean {
-  return ["proposed", "approved", "ready_for_execution", "executing"].includes(status);
+  return ["proposed", "approved", "ready_for_execution", "executing", "unknown"].includes(status);
 }
 
 function parsePayload<T>(payload: T | string): T { return typeof payload === "string" ? JSON.parse(payload) as T : payload; }
-const memoryStore = globalThis as typeof globalThis & { payPulseAgentActionRepository?: MemoryAgentActionRepository };
-export function getAgentActionRepository(): AgentActionRepository {
-  if (process.env.DATABASE_URL?.trim()) return new PostgresAgentActionRepository(toSqlExecutor(getPostgresPool()), process.env.PAYPULSE_MERCHANT_ID?.trim() || "paypal-sandbox-default");
-  memoryStore.payPulseAgentActionRepository ??= new MemoryAgentActionRepository();
-  return memoryStore.payPulseAgentActionRepository;
+const memoryStore = globalThis as typeof globalThis & { payPulseAgentActionRepositories?: Map<string, MemoryAgentActionRepository> };
+export function getAgentActionRepository(merchantId?: string): AgentActionRepository {
+  const resolvedMerchantId = merchantId ?? (process.env.PAYPULSE_MERCHANT_ID?.trim() || "paypal-sandbox-default");
+  if (process.env.DATABASE_URL?.trim()) return new PostgresAgentActionRepository(toSqlExecutor(getPostgresPool()), resolvedMerchantId);
+  assertPersistenceConfigured();
+  if (!canUseMemoryPersistence()) throw new Error("Memory persistence was not explicitly enabled.");
+  const repositories = memoryStore.payPulseAgentActionRepositories ??= new Map();
+  let repository = repositories.get(resolvedMerchantId);
+  if (!repository) {
+    repository = new MemoryAgentActionRepository();
+    repositories.set(resolvedMerchantId, repository);
+  }
+  return repository;
 }

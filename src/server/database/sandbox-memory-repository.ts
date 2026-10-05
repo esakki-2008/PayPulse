@@ -72,10 +72,15 @@ export class SandboxMemoryRepository implements PaymentIntelligenceRepository {
 }
 
 const sandboxRepositoryGlobal = globalThis as typeof globalThis & {
-  payPulseSandboxMemoryRepository?: SandboxMemoryRepository;
+  payPulseSandboxMemoryRepositories?: Map<string, SandboxMemoryRepository>;
 };
 
-export function getSandboxMemoryRepository(): SandboxMemoryRepository {
-  sandboxRepositoryGlobal.payPulseSandboxMemoryRepository ??= new SandboxMemoryRepository();
-  return sandboxRepositoryGlobal.payPulseSandboxMemoryRepository;
+export function getSandboxMemoryRepository(merchantId = "paypal-sandbox-default"): SandboxMemoryRepository {
+  const repositories = sandboxRepositoryGlobal.payPulseSandboxMemoryRepositories ??= new Map();
+  let repository = repositories.get(merchantId);
+  if (!repository) {
+    repository = new SandboxMemoryRepository();
+    repositories.set(merchantId, repository);
+  }
+  return repository;
 }

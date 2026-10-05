@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { Component, type ReactNode, useEffect, useState } from "react";
 
 import { CoreFallback } from "./core-fallback";
 import type { IntelligenceStage } from "@/components/ui/intelligence-lifecycle";
@@ -11,6 +11,12 @@ const IntelligenceScene = dynamic(() => import("./intelligence-scene"), {
   ssr: false,
   loading: () => <CoreFallback state="analyzing" />,
 });
+
+class SceneErrorBoundary extends Component<{ readonly children: ReactNode; readonly state: CoreState }, { readonly failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError(): { readonly failed: boolean } { return { failed: true }; }
+  render(): ReactNode { return this.state.failed ? <CoreFallback state={this.props.state} /> : this.props.children; }
+}
 
 function supportsWebGl(): boolean {
   try {
@@ -59,13 +65,15 @@ export function IntelligenceCore({
   if (webglAvailable === null) return <CoreFallback state={state} />;
 
   return (
-    <IntelligenceScene
-      state={state}
-      customers={customers}
-      customerStates={customerStates}
-      onCustomerSelect={onCustomerSelect}
-      onStageSelect={onStageSelect}
-      compact={compact}
-    />
+    <SceneErrorBoundary state={state}>
+      <IntelligenceScene
+        state={state}
+        customers={customers}
+        customerStates={customerStates}
+        onCustomerSelect={onCustomerSelect}
+        onStageSelect={onStageSelect}
+        compact={compact}
+      />
+    </SceneErrorBoundary>
   );
 }

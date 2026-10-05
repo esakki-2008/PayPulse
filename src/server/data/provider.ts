@@ -13,6 +13,7 @@ import { calculateDashboardMetrics } from "../dashboard/metrics";
 import { getDemoDashboardSnapshot } from "../dashboard/service";
 import { getDemoRepository } from "../database/demo-store";
 import { getLearningProjection } from "../actions/learning/engine";
+import { getOutcomeLearningRepository } from "../actions/learning/repository";
 import { buildDeterministicIntelligence } from "../intelligence/deterministic-intelligence";
 import type {
   Customer,
@@ -56,13 +57,19 @@ export interface DataSourceResult<T> {
   readonly capabilities?: PayPalSandboxCapabilityStatus;
 }
 
+export class DataSourceValidationError extends Error {
+  override readonly name = "DataSourceValidationError";
+}
+
 export function parseDataSource(value: string | undefined): DataSource {
+  if (value === undefined || value === "paypal_sandbox") return "paypal_sandbox";
   if (value === "demo") return "demo";
-  return "paypal_sandbox";
+  throw new DataSourceValidationError("The selected data source is invalid.");
 }
 
 export async function getDashboardForSource(
   source: DataSource,
+  merchantId?: string,
 ): Promise<DataSourceResult<DashboardSnapshot>> {
   if (source === "demo") {
     const data = await getDemoDashboardSnapshot();
@@ -75,11 +82,11 @@ export async function getDashboardForSource(
   }
 
   try {
-    const sandbox = await getSandboxDataSafely();
+    const sandbox = await getSandboxDataSafely(merchantId);
     return sandboxResult(sandbox, sandbox.snapshot);
   } catch (error) {
     if (error instanceof DataSourceError && error.category === "unsupported_capability") {
-      return knownOrdersFallback();
+      return knownOrdersFallback(merchantId);
     }
     throw error;
   }
@@ -87,13 +94,15 @@ export async function getDashboardForSource(
 
 export async function getIntelligenceForSource(
   source: DataSource,
+  merchantId?: string,
 ): Promise<DataSourceResult<ReturnType<typeof buildDeterministicIntelligence>>> {
-  const dashboard = await getDashboardForSource(source);
-  const projection = await getLearningProjection(source);
+  const dashboard = await getDashboardForSource(source, merchantId);
+  const projection = await getLearningProjection(source, getOutcomeLearningRepository(merchantId));
   const transactions = mergeVerifiedTransactions(dashboard.data.transactions, projection.derivedTransactions);
+  const projectedCustomers = mergeVerifiedCustomers(dashboard.data.customers, projection.derivedTransactions, source);
   return {
     data: buildDeterministicIntelligence(
-      dashboard.data.customers,
+      projectedCustomers,
       transactions,
       source,
       new Date(dashboard.data.generatedAt),
@@ -109,9 +118,10 @@ export async function getIntelligenceForSource(
 
 export async function getTransactionsForSource(
   source: DataSource,
+  merchantId?: string,
 ): Promise<DataSourceResult<readonly Transaction[]>> {
   if (source === "demo") {
-    const [transactions, projection] = await Promise.all([getDemoRepository().listTransactions(), getLearningProjection(source)]);
+    const [transactions, projection] = await Promise.all([getDemoRepository().listTransactions(), getLearningProjection(source, getOutcomeLearningRepository(merchantId))]);
     return {
       data: mergeVerifiedTransactions(transactions, projection.derivedTransactions),
       source: "demo",
@@ -121,12 +131,12 @@ export async function getTransactionsForSource(
   }
 
   try {
-    const sandbox = await getSandboxDataSafely();
-    const projection = await getLearningProjection(source);
+    const sandbox = await getSandboxDataSafely(merchantId);
+    const projection = await getLearningProjection(source, getOutcomeLearningRepository(merchantId));
     return sandboxResult(sandbox, mergeVerifiedTransactions(sandbox.snapshot.transactions, projection.derivedTransactions));
   } catch (error) {
     if (error instanceof DataSourceError && error.category === "unsupported_capability") {
-      const fallback = await knownOrdersFallback();
+      const fallback = await knownOrdersFallback(merchantId);
       return { ...fallback, data: fallback.data.transactions };
     }
     throw error;
@@ -135,6 +145,7 @@ export async function getTransactionsForSource(
 
 export async function getCustomersForSource(
   source: DataSource,
+  merchantId?: string,
 ): Promise<DataSourceResult<readonly Customer[]>> {
   if (source === "demo") {
     return {
@@ -146,11 +157,12 @@ export async function getCustomersForSource(
   }
 
   try {
-    const sandbox = await getSandboxDataSafely();
-    return sandboxResult(sandbox, sandbox.snapshot.customers);
+    const sandbox = await getSandboxDataSafely(merchantId);
+    const projection = await getLearningProjection(source, getOutcomeLearningRepository(merchantId));
+    return sandboxResult(sandbox, mergeVerifiedCustomers(sandbox.snapshot.customers, projection.derivedTransactions, source));
   } catch (error) {
     if (error instanceof DataSourceError && error.category === "unsupported_capability") {
-      const fallback = await knownOrdersFallback();
+      const fallback = await knownOrdersFallback(merchantId);
       return { ...fallback, data: fallback.data.customers };
     }
     throw error;
@@ -160,6 +172,7 @@ export async function getCustomersForSource(
 export async function getCustomerForSource(
   source: DataSource,
   customerId: string,
+  merchantId?: string,
 ): Promise<DataSourceResult<Customer | null>> {
   if (source === "demo") {
     return {
@@ -171,14 +184,13 @@ export async function getCustomerForSource(
   }
 
   try {
-    const sandbox = await getSandboxDataSafely();
-    return sandboxResult(
-      sandbox,
-      sandbox.snapshot.customers.find((customer) => customer.id === customerId) ?? null,
-    );
+    const sandbox = await getSandboxDataSafely(merchantId);
+    const projection = await getLearningProjection(source, getOutcomeLearningRepository(merchantId));
+    const customers = mergeVerifiedCustomers(sandbox.snapshot.customers, projection.derivedTransactions, source);
+    return sandboxResult(sandbox, customers.find((customer) => customer.id === customerId) ?? null);
   } catch (error) {
     if (error instanceof DataSourceError && error.category === "unsupported_capability") {
-      const fallback = await knownOrdersFallback();
+      const fallback = await knownOrdersFallback(merchantId);
       return { ...fallback, data: fallback.data.customers.find((customer) => customer.id === customerId) ?? null };
     }
     throw error;
@@ -189,13 +201,20 @@ function mergeVerifiedTransactions(base: readonly Transaction[], learned: readon
   return [...new Map([...base, ...learned].map((transaction) => [transaction.id, transaction])).values()];
 }
 
+/** Provider-verified outcome payments may introduce a payer absent from reporting. */
+function mergeVerifiedCustomers(base: readonly Customer[], learned: readonly Transaction[], source: DataSource): readonly Customer[] {
+  if (source !== "paypal_sandbox" || learned.length === 0) return base;
+  const derived = customersFromKnownOrderTransactions(learned);
+  return [...new Map([...base, ...derived].map((customer) => [customer.id, customer])).values()];
+}
+
 /**
  * Orders v2 fallback is intentionally narrow: it exposes only provider-verified
  * payments from known PayPulse-created orders already stored by Phase 8. It is
  * never labelled or treated as Transaction Search / merchant-wide history.
  */
-async function knownOrdersFallback(): Promise<DataSourceResult<DashboardSnapshot>> {
-  const projection = await getLearningProjection("paypal_sandbox");
+async function knownOrdersFallback(merchantId?: string): Promise<DataSourceResult<DashboardSnapshot>> {
+  const projection = await getLearningProjection("paypal_sandbox", getOutcomeLearningRepository(merchantId));
   if (projection.derivedTransactions.length === 0) {
     throw new DataSourceError(
       "PayPal Sandbox transaction reporting is unavailable and no verified PayPulse-created order payment is stored.",
@@ -261,9 +280,9 @@ function customersFromKnownOrderTransactions(transactions: readonly Transaction[
   }).sort((left, right) => left.id.localeCompare(right.id));
 }
 
-async function getSandboxDataSafely(): Promise<PayPalSandboxDataSnapshot> {
+async function getSandboxDataSafely(merchantId?: string): Promise<PayPalSandboxDataSnapshot> {
   try {
-    return await getCachedPayPalSandboxData();
+    return await getCachedPayPalSandboxData(merchantId);
   } catch (error) {
     throw toDataSourceError(error);
   }

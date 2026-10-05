@@ -31,6 +31,7 @@ export function buildActionCandidates(
     return [actionCandidateSchema.parse({
       id: `action_${fingerprint.slice(0, 20)}`,
       fingerprint,
+      attempt: 1,
       version: 1,
       type: rule.type,
       title: rule.title,

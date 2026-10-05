@@ -9,6 +9,7 @@ import {
   type PayPalTransactionReader,
 } from "./transaction-service";
 import { assertServerRuntime } from "../runtime";
+import { assertPersistenceConfigured, canUseMemoryPersistence } from "../runtime-config";
 import type { DashboardSnapshot } from "@/types/domain";
 
 assertServerRuntime("PayPal Sandbox data adapter");
@@ -33,6 +34,7 @@ export interface PayPalSandboxDataAdapterOptions {
   readonly repository?: PaymentIntelligenceRepository;
   readonly now?: () => Date;
   readonly persistence?: SandboxPersistence;
+  readonly merchantId?: string;
 }
 
 /**
@@ -125,37 +127,33 @@ interface CachedSandboxSnapshot {
 }
 
 const sandboxCache = globalThis as typeof globalThis & {
-  payPulseSandboxSnapshot?: CachedSandboxSnapshot;
-  payPulseSandboxSync?: Promise<PayPalSandboxDataSnapshot>;
+  payPulseSandboxSnapshots?: Map<string, CachedSandboxSnapshot>;
+  payPulseSandboxSyncs?: Map<string, Promise<PayPalSandboxDataSnapshot>>;
 };
 
 /**
  * Short server-side cache avoids reporting API calls on every page/API render.
- * There is no browser polling and no data is fabricated on failure.
+ * Cache entries are merchant-scoped so one merchant can never receive another
+ * merchant's normalized Sandbox snapshot.
  */
-export async function getCachedPayPalSandboxData(): Promise<PayPalSandboxDataSnapshot> {
+export async function getCachedPayPalSandboxData(merchantId = DEFAULT_MERCHANT_ID): Promise<PayPalSandboxDataSnapshot> {
+  const snapshots = sandboxCache.payPulseSandboxSnapshots ??= new Map();
+  const syncs = sandboxCache.payPulseSandboxSyncs ??= new Map();
   const now = Date.now();
-  const cached = sandboxCache.payPulseSandboxSnapshot;
-  if (cached && cached.expiresAtMs > now) {
-    return cached.value;
-  }
+  const cached = snapshots.get(merchantId);
+  if (cached && cached.expiresAtMs > now) return cached.value;
 
-  if (sandboxCache.payPulseSandboxSync) {
-    return sandboxCache.payPulseSandboxSync;
-  }
+  const inFlight = syncs.get(merchantId);
+  if (inFlight) return inFlight;
 
-  const sync = new PayPalSandboxDataAdapter().syncRecentTransactions();
-  sandboxCache.payPulseSandboxSync = sync;
-
+  const sync = new PayPalSandboxDataAdapter({ merchantId }).syncRecentTransactions();
+  syncs.set(merchantId, sync);
   try {
     const value = await sync;
-    sandboxCache.payPulseSandboxSnapshot = {
-      value,
-      expiresAtMs: Date.now() + SANDBOX_CACHE_TTL_MS,
-    };
+    snapshots.set(merchantId, { value, expiresAtMs: Date.now() + SANDBOX_CACHE_TTL_MS });
     return value;
   } finally {
-    sandboxCache.payPulseSandboxSync = undefined;
+    syncs.delete(merchantId);
   }
 }
 
@@ -172,23 +170,18 @@ function resolveSelectedRepository(
     };
   }
 
-  return resolveSandboxRepository();
+  return resolveSandboxRepository(options.merchantId);
 }
 
-function resolveSandboxRepository(): {
+function resolveSandboxRepository(merchantId?: string): {
   readonly repository: PaymentIntelligenceRepository;
   readonly persistence: SandboxPersistence;
 } {
+  const resolvedMerchantId = merchantId ?? (process.env.PAYPULSE_MERCHANT_ID?.trim() || DEFAULT_MERCHANT_ID);
   if (process.env.DATABASE_URL?.trim()) {
-    const repository = new PostgresPaymentIntelligenceRepository(
-      toSqlExecutor(getPostgresPool()),
-      process.env.PAYPULSE_MERCHANT_ID?.trim() || DEFAULT_MERCHANT_ID,
-    );
-    return { repository, persistence: "postgres" };
+    return { repository: new PostgresPaymentIntelligenceRepository(toSqlExecutor(getPostgresPool()), resolvedMerchantId), persistence: "postgres" };
   }
-
-  return {
-    repository: getSandboxMemoryRepository(),
-    persistence: "memory_cache",
-  };
+  assertPersistenceConfigured();
+  if (!canUseMemoryPersistence()) throw new Error("Memory persistence was not explicitly enabled.");
+  return { repository: getSandboxMemoryRepository(resolvedMerchantId), persistence: "memory_cache" };
 }

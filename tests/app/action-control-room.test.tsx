@@ -12,7 +12,7 @@ import type { ActionCandidate, AgentActionEvent, DeterministicIntelligence } fro
 const action: ActionCandidate = {
   id: "action-sandbox-test", type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION", title: "Verify a Sandbox payment", summary: "Test-only verification action.", reason: "Explicit merchant request.", severity: "low", confidence: 1,
   source: "paypal_sandbox", customerIds: [], transactionIds: [], evidence: [{ type: "insight", field: "sandbox_checkout_configuration", value: "Fixed server configuration.", transactionIds: [] }],
-  whatWillHappen: "Prepare a Sandbox verification workflow.", expectedImpact: "No production payment activity.", limitations: ["Sandbox only."], createdAt: "2026-10-03T00:00:00.000Z", expiresAt: "2026-10-04T00:00:00.000Z", status: "proposed", version: 1, fingerprint: "test-fingerprint",
+  whatWillHappen: "Prepare a Sandbox verification workflow.", expectedImpact: "No production payment activity.", limitations: ["Sandbox only."], createdAt: "2026-10-03T00:00:00.000Z", expiresAt: "2026-10-04T00:00:00.000Z", status: "proposed", version: 1, fingerprint: "test-fingerprint", attempt: 1,
 };
 const intelligence: DeterministicIntelligence = {
   source: "paypal_sandbox", generatedAt: "2026-10-03T00:00:00.000Z", methodology: "Test-only deterministic intelligence.", customerProfiles: [], revenueByCurrency: [], insights: [], customerActivityCount: 0, repeatCustomerActivityCount: 0,

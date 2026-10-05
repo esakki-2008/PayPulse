@@ -3,6 +3,7 @@ import { z } from "zod";
 export const actionCandidateSchema = z.object({
   id: z.string().min(1),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  attempt: z.number().int().positive(),
   version: z.number().int().positive(),
   type: z.enum(["PAYMENT_REMINDER", "CUSTOMER_REVIEW", "RETENTION_REVIEW", "PAYMENT_ANOMALY_REVIEW", "REVENUE_REVIEW", "CUSTOMER_FOLLOWUP"]),
   title: z.string().min(1),
@@ -19,5 +20,5 @@ export const actionCandidateSchema = z.object({
   limitations: z.array(z.string().min(1)).min(1),
   createdAt: z.string().datetime({ offset: true }),
   expiresAt: z.string().datetime({ offset: true }),
-  status: z.enum(["proposed", "approved", "rejected", "expired", "ready_for_execution", "executing", "succeeded", "failed"]),
+  status: z.enum(["proposed", "approved", "rejected", "expired", "ready_for_execution", "executing", "unknown", "succeeded", "failed"]),
 }).strict();

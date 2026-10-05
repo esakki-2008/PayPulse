@@ -11,6 +11,7 @@ const orderId = "5O190127TN364715T";
 const verificationAction = {
   id: "action_sandbox_payment_test",
   fingerprint: "sandbox-fingerprint",
+  attempt: 1,
   version: 1,
   type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION",
   title: "Verify a PayPal Sandbox payment flow",

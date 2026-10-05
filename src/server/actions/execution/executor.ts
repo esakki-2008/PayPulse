@@ -59,8 +59,19 @@ export async function executeApprovedPayPalSandboxAction(
   const outcomeRepository = dependencies.outcomeRepository ?? getExecutionOutcomeRepository();
   const action = await loadActionForExecution(request.actionId, actionRepository, dependencies.now);
   const idempotencyKey = executionIdempotencyKey(action, request.version);
+  // A prior execution is a server-owned immutable result. Returning it is a
+  // read-only idempotent replay, not a new provider attempt.
   const existing = await outcomeRepository.findByIdempotencyKey(idempotencyKey);
   if (existing) return existingResult(existing, actionRepository);
+  // All request/action/capability checks occur before reserving a new execution
+  // key. A temporary misconfiguration must be retryable, not a durable lock.
+  const events = await actionRepository.listEvents("paypal_sandbox", action.id);
+  validateExecutionRequest({ source: request.source, action, events, version: request.version, now: dependencies.now });
+  if (action.type !== "PAYPAL_SANDBOX_PAYMENT_VERIFICATION") {
+    throw new ActionExecutionUnavailableError("Only the explicit PayPal Sandbox verification action can create a Sandbox checkout order. Intelligence recommendations remain non-financial.", 501);
+  }
+  const capability = (dependencies.capabilityProvider ?? getPayPalSandboxExecutionCapability)();
+  if (!capability.available) throw new ActionExecutionUnavailableError(capability.reason, 503);
 
   const reservation = await outcomeRepository.claim({
     actionId: action.id,
@@ -70,19 +81,11 @@ export async function executeApprovedPayPalSandboxAction(
     paypalReference: null,
     idempotencyKey,
     failureCategory: null,
-    summary: "Sandbox execution reservation is being validated.",
+    summary: "Sandbox execution reservation was validated and is awaiting provider order creation.",
   });
   if (!reservation.claimed) return existingResult(reservation.outcome, actionRepository);
 
   try {
-    const events = await actionRepository.listEvents("paypal_sandbox", action.id);
-    validateExecutionRequest({ source: request.source, action, events, version: request.version, now: dependencies.now });
-    if (action.type !== "PAYPAL_SANDBOX_PAYMENT_VERIFICATION") {
-      return unavailableOutcome(outcomeRepository, reservation.outcome, action, "Only the explicit PayPal Sandbox verification action can create a Sandbox checkout order. Intelligence recommendations remain non-financial.");
-    }
-    const capability = (dependencies.capabilityProvider ?? getPayPalSandboxExecutionCapability)();
-    if (!capability.available) return unavailableOutcome(outcomeRepository, reservation.outcome, action, capability.reason);
-
     const executingAction = await transitionAgentActionExecution(
       action,
       "executing",
@@ -152,7 +155,7 @@ export async function completeApprovedPayPalSandboxAction(
   const actionRepository = dependencies.actionRepository ?? getAgentActionRepository();
   const executionRepository = dependencies.outcomeRepository ?? getExecutionOutcomeRepository();
   const learningRepository = dependencies.learningRepository ?? getOutcomeLearningRepository();
-  const action = await actionRepository.getAction("paypal_sandbox", request.actionId);
+  let action = await actionRepository.getAction("paypal_sandbox", request.actionId);
   if (!action) throw new AgentActionNotFoundError("Action not found in the selected data source.");
   const executions = await executionRepository.listByActionId(action.id);
   const execution = [...executions].reverse().find((candidate) => candidate.operation === "capture_order" && candidate.paypalReference);
@@ -162,8 +165,17 @@ export async function completeApprovedPayPalSandboxAction(
   if (execution.status === "succeeded" && action.status === "succeeded") {
     return completedIdempotentResult(execution, action, learningRepository);
   }
-  if (action.status !== "executing" || execution.status !== "pending") {
+  if ((action.status !== "executing" && action.status !== "unknown") || execution.status !== "pending") {
     throw new ActionExecutionUnavailableError("This Sandbox order is not awaiting buyer approval and verification.", 409);
+  }
+  if (action.status === "unknown") {
+    action = await transitionAgentActionExecution(
+      action,
+      "executing",
+      "Reconciliation re-read of the server-bound PayPal Sandbox order began.",
+      actionRepository,
+      dependencies.now,
+    );
   }
 
   const orderService = dependencies.orderService ?? new PayPalOrderService();
@@ -198,7 +210,8 @@ export async function completeApprovedPayPalSandboxAction(
         executionId: pendingExecution.executionId,
         timestamp: pendingExecution.timestamp,
       }, { actionRepository, executionRepository, outcomeRepository: learningRepository });
-      return { outcome: pendingExecution, action, executionOccurred: true, idempotent: false, status: 202, approvalUrl: null, buyerApprovalRequired: true, learning };
+      const unknownAction = await transitionAgentActionExecution(action, "unknown", "PayPal Sandbox verification could not be confirmed. Reconciliation is required before another provider decision.", actionRepository, dependencies.now);
+      return { outcome: pendingExecution, action: unknownAction, executionOccurred: true, idempotent: false, status: 202, approvalUrl: null, buyerApprovalRequired: true, learning };
     }
     const failedExecution = await persistOutcome(executionRepository, execution, {
       status: "failed", failureCategory: failure.category, summary: failure.summary,
@@ -280,8 +293,11 @@ async function persistVerifiedOrder(
     failureCategory: verified.failureCategory, limitations: verified.limitations,
     executionId: pendingExecution.executionId, timestamp: verified.timestamp,
   }, { actionRepository, executionRepository, outcomeRepository: learningRepository });
+  const nextAction = verified.status === "unknown"
+    ? await transitionAgentActionExecution(action, "unknown", "PayPal returned an unrecognized order state. Reconciliation is required; no payment was confirmed.", actionRepository, now)
+    : action;
   return {
-    outcome: pendingExecution, action, executionOccurred: true, idempotent: false,
+    outcome: pendingExecution, action: nextAction, executionOccurred: true, idempotent: false,
     status: 202, approvalUrl: order.approvalUrl, buyerApprovalRequired: verified.status === "pending", learning,
   };
 }
@@ -321,13 +337,6 @@ function assertSandboxSource(source: DataSource): void {
   if (source !== "paypal_sandbox") {
     throw new ActionExecutionUnavailableError("Demo execution is disabled. Demo data is never mapped to PayPal Sandbox.", 501);
   }
-}
-
-async function unavailableOutcome(repository: ExecutionOutcomeRepository, outcome: ExecutionOutcome, action: ActionCandidate, reason: string): Promise<ExecutionResult> {
-  const saved = await persistOutcome(repository, outcome, {
-    status: "capability_unavailable", failureCategory: "capability", summary: `${reason} No PayPal operation was attempted.`,
-  });
-  return { outcome: saved, action, executionOccurred: false, idempotent: false, status: 503, approvalUrl: null, buyerApprovalRequired: false, learning: null };
 }
 
 async function persistOutcome(

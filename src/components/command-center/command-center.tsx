@@ -32,7 +32,7 @@ export function CommandCenter({
   const coreState = useMemo<CoreState>(() => {
     const latestOutcome = [...verifiedOutcomes].sort((left, right) => left.timestamp.localeCompare(right.timestamp)).at(-1);
     const latestLearning = [...learningEvents].sort((left, right) => left.timestamp.localeCompare(right.timestamp)).at(-1);
-    if (latestOutcome?.status === "pending" || agentActions.some((action) => action.status === "executing")) return "executing";
+    if (latestOutcome?.status === "pending" || agentActions.some((action) => action.status === "executing" || action.status === "unknown")) return "executing";
     if (latestOutcome?.status === "failed" || agentActions.some((action) => action.status === "failed")) return "failed";
     if (latestOutcome?.status === "succeeded" && latestLearning?.outcomeId === latestOutcome.outcomeId && latestLearning.learningStatus === "applied") return "learning";
     if (latestOutcome?.status === "succeeded" || agentActions.some((action) => action.status === "succeeded")) return "completed";

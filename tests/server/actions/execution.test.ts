@@ -12,6 +12,7 @@ import type { ActionCandidate, AgentActionEvent, AgentActionPlan, DataSource } f
 const action: ActionCandidate = {
   id: "action_execution_test",
   fingerprint: "a".repeat(64),
+  attempt: 1,
   version: 3,
   type: "PAYMENT_ANOMALY_REVIEW",
   title: "Review unusual activity",
@@ -39,7 +40,7 @@ class FakeActionRepository implements AgentActionRepository {
   async saveAction(value: ActionCandidate) { this.actions.set(value.id, value); return value; }
   async listEvents(source: DataSource, id?: string) { return this.events.filter((item) => item.source === source && (!id || item.actionId === id)); }
   async appendEvent(event: AgentActionEvent) { if (!this.events.some((item) => item.id === event.id)) this.events.push(event); }
-  async saveActionWithEventIfInactive(value: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(value.id); if (current && ["proposed", "approved", "ready_for_execution", "executing"].includes(current.status)) return { action: current, created: false }; this.actions.set(value.id, value); await this.appendEvent(event); return { action: value, created: true }; }
+  async saveActionWithEventIfInactive(value: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(value.id); if (current && ["proposed", "approved", "ready_for_execution", "executing", "unknown"].includes(current.status)) return { action: current, created: false }; this.actions.set(value.id, value); await this.appendEvent(event); return { action: value, created: true }; }
   async transitionAction(value: ActionCandidate, event: AgentActionEvent) { const current = this.actions.get(value.id); if (!current || current.version !== value.version - 1 || current.status !== event.previousStatus) return null; this.actions.set(value.id, value); await this.appendEvent(event); return value; }
   async transitionExecutionAction(value: ActionCandidate, event: AgentActionEvent) { return this.transitionAction(value, event); }
   async getPlan(): Promise<AgentActionPlan | null> { return null; }
@@ -79,52 +80,48 @@ describe("Phase 7 PayPal Sandbox execution boundary", () => {
     expect(repository.actions.size).toBe(0);
   });
 
-  it("records a truthful capability-unavailable Sandbox result without a provider operation", async () => {
-    const repository = readyRepository();
+  it("does not reserve an execution key when capability/configuration validation is unavailable", async () => {
+    const verification = { ...action, type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION" as const };
+    const repository = readyRepository(verification);
     const outcomes = new MemoryExecutionOutcomeRepository();
-    const result = await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: repository, outcomeRepository: outcomes, now: new Date("2026-10-04T00:00:00.000Z") });
-    expect(result).toMatchObject({ executionOccurred: false, idempotent: false, status: 503, outcome: { status: "capability_unavailable", operation: "capture_order", failureCategory: "capability", paypalReference: null } });
-    expect(result.outcome.summary).toContain("No PayPal operation was attempted");
-    expect((await repository.getAction("paypal_sandbox", action.id))?.status).toBe("ready_for_execution");
+    const request = { source: "paypal_sandbox" as const, actionId: verification.id, version: verification.version };
+    await expect(executeApprovedPayPalSandboxAction(request, {
+      actionRepository: repository, outcomeRepository: outcomes,
+      capabilityProvider: () => ({ provider: "paypal_sandbox", operation: "capture_order", endpoint: "https://api-m.sandbox.paypal.com/v2/checkout/orders/{id}/capture", available: false, reason: "Sandbox configuration is unavailable." }),
+    })).rejects.toMatchObject({ name: "ActionExecutionUnavailableError", status: 503 });
+    expect(await outcomes.findByIdempotencyKey(executionIdempotencyKey(verification, verification.version))).toBeNull();
+    expect((await repository.getAction("paypal_sandbox", verification.id))?.status).toBe("ready_for_execution");
   });
 
-  it("returns the same normalized outcome for a duplicate/concurrent request", async () => {
-    const repository = readyRepository();
+  it("permits repeat attempts after capability failure because no execution lock was consumed", async () => {
+    const verification = { ...action, type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION" as const };
+    const repository = readyRepository(verification);
     const outcomes = new MemoryExecutionOutcomeRepository();
-    const request = { source: "paypal_sandbox" as const, actionId: action.id, version: 3 };
-    const [first, second] = await Promise.all([
-      executeApprovedPayPalSandboxAction(request, { actionRepository: repository, outcomeRepository: outcomes, now: new Date("2026-10-04T00:00:00.000Z") }),
-      executeApprovedPayPalSandboxAction(request, { actionRepository: repository, outcomeRepository: outcomes, now: new Date("2026-10-04T00:00:00.000Z") }),
-    ]);
-    expect([first.idempotent, second.idempotent]).toContain(true);
-    expect(first.outcome.executionId).toBe(second.outcome.executionId);
+    const request = { source: "paypal_sandbox" as const, actionId: verification.id, version: verification.version };
+    const dependencies = { actionRepository: repository, outcomeRepository: outcomes, capabilityProvider: () => ({ provider: "paypal_sandbox" as const, operation: "capture_order" as const, endpoint: "https://api-m.sandbox.paypal.com/v2/checkout/orders/{id}/capture" as const, available: false as const, reason: "Capability unavailable." }) };
+    await expect(executeApprovedPayPalSandboxAction(request, dependencies)).rejects.toMatchObject({ status: 503 });
+    await expect(executeApprovedPayPalSandboxAction(request, dependencies)).rejects.toMatchObject({ status: 503 });
+    expect(await outcomes.findByIdempotencyKey(executionIdempotencyKey(verification, verification.version))).toBeNull();
   });
 
   it.each([
     ["proposed", 409, "Only an approved action"],
     ["approved", 409, "Only an approved action"],
     ["rejected", 409, "Only an approved action"],
-  ] as const)("blocks %s action state without a provider operation", async (status, expectedStatus, message) => {
+  ] as const)("blocks %s action state before reserving a provider execution", async (status, expectedStatus, message) => {
     const repository = readyRepository({ status });
-    const result = await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: repository, outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") });
-    expect(result.status).toBe(expectedStatus);
-    expect(result.outcome).toMatchObject({ status: "failed", failureCategory: "validation" });
-    expect(result.outcome.summary).toContain(message);
+    const outcomes = new MemoryExecutionOutcomeRepository();
+    await expect(executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: repository, outcomeRepository: outcomes, now: new Date("2026-10-04T00:00:00.000Z") })).rejects.toMatchObject({ name: "ActionExecutionValidationError", status: expectedStatus });
+    await expect(executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: repository, outcomeRepository: outcomes, now: new Date("2026-10-04T00:00:00.000Z") })).rejects.toThrow(message);
+    expect(await outcomes.findByIdempotencyKey(executionIdempotencyKey(action, 3))).toBeNull();
   });
 
-  it("blocks stale version, expiry, missing approval, and malformed evidence", async () => {
-    const stale = await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 2 }, { actionRepository: readyRepository(), outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") });
-    expect(stale.outcome.failureCategory).toBe("conflict");
-
-    const expired = await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: readyRepository({ expiresAt: "2026-10-02T00:00:00.000Z" }), outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") });
-    expect(expired.outcome.failureCategory).toBe("expired");
-
+  it("rejects stale version, expiry, missing approval, and malformed evidence before reserving execution", async () => {
+    await expect(executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 2 }, { actionRepository: readyRepository(), outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") })).rejects.toMatchObject({ name: "ActionExecutionValidationError", category: "conflict" });
+    await expect(executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: readyRepository({ expiresAt: "2026-10-02T00:00:00.000Z" }), outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") })).rejects.toMatchObject({ name: "ActionExecutionValidationError", category: "expired" });
     const noApproval = readyRepository(); noApproval.events.length = 0;
-    const unapproved = await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: noApproval, outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") });
-    expect(unapproved.outcome.summary).toContain("recorded merchant approval");
-
-    const evidence = await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: readyRepository({ evidence: [] }), outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") });
-    expect(evidence.outcome.summary).toContain("invalid or missing evidence");
+    await expect(executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: noApproval, outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") })).rejects.toThrow("recorded merchant approval");
+    await expect(executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 3 }, { actionRepository: readyRepository({ evidence: [] }), outcomeRepository: new MemoryExecutionOutcomeRepository(), now: new Date("2026-10-04T00:00:00.000Z") })).rejects.toThrow("invalid or missing evidence");
   });
 
   it("has audited server-only execution state transitions for a future verified capability", async () => {

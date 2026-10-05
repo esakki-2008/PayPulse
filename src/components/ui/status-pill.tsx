@@ -14,6 +14,7 @@ const toneByStatus: Record<Status, string> = {
   awaiting_approval: "border-amber-300/25 bg-amber-300/10 text-amber-100",
   approved: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
   executing: "border-violet-300/25 bg-violet-300/10 text-violet-100",
+  unknown: "border-amber-300/25 bg-amber-300/10 text-amber-100",
   completed: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
   learned: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
   rejected: "border-slate-300/25 bg-slate-300/10 text-slate-200",

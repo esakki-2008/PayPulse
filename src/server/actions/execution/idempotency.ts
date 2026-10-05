@@ -13,6 +13,7 @@ export function executionIdempotencyKey(action: ActionCandidate, version: number
       source: action.source,
       actionId: action.id,
       actionFingerprint: action.fingerprint,
+      attempt: action.attempt,
       version,
       operation: "capture_order",
     }))

@@ -14,6 +14,7 @@ const NOW = new Date("2026-10-03T12:00:00.000Z");
 const action: ActionCandidate = {
   id: "action_phase8",
   fingerprint: "b".repeat(64),
+  attempt: 1,
   version: 4,
   type: "PAYMENT_ANOMALY_REVIEW",
   title: "Review a verified payment",
@@ -40,7 +41,7 @@ class FakeActions implements AgentActionRepository {
   async saveAction(candidate: ActionCandidate) { this.records.set(candidate.id, candidate); return candidate; }
   async listEvents(): Promise<readonly AgentActionEvent[]> { return []; }
   async appendEvent(): Promise<void> { /* test store does not need action events */ }
-  async saveActionWithEventIfInactive(candidate: ActionCandidate) { const current = this.records.get(candidate.id); if (current && ["proposed", "approved", "ready_for_execution", "executing"].includes(current.status)) return { action: current, created: false }; this.records.set(candidate.id, candidate); return { action: candidate, created: true }; }
+  async saveActionWithEventIfInactive(candidate: ActionCandidate) { const current = this.records.get(candidate.id); if (current && ["proposed", "approved", "ready_for_execution", "executing", "unknown"].includes(current.status)) return { action: current, created: false }; this.records.set(candidate.id, candidate); return { action: candidate, created: true }; }
   async transitionAction(): Promise<ActionCandidate | null> { return null; }
   async transitionExecutionAction(): Promise<ActionCandidate | null> { return null; }
   async getPlan(): Promise<AgentActionPlan | null> { return null; }

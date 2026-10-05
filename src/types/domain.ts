@@ -275,6 +275,8 @@ export type AgentActionStatus =
   | "expired"
   | "ready_for_execution"
   | "executing"
+  /** Provider result cannot yet be verified; reconciliation is required. */
+  | "unknown"
   | "succeeded"
   | "failed";
 
@@ -288,6 +290,8 @@ export interface ActionEvidence {
 export interface ActionCandidate {
   readonly id: string;
   readonly fingerprint: string;
+  /** Monotonically increments for a new verification lifecycle of the same deterministic request. */
+  readonly attempt: number;
   readonly version: number;
   readonly type: AgentActionType;
   readonly title: string;

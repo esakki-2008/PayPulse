@@ -1,4 +1,5 @@
 import { getPostgresPool, toSqlExecutor, type SqlExecutor } from "../../database/postgres-client";
+import { assertPersistenceConfigured, canUseMemoryPersistence } from "../../runtime-config";
 import type { ActionOutcome, DataSource, LearningEvent } from "@/types/domain";
 
 /**
@@ -139,14 +140,19 @@ function deepFreeze<T>(value: T): T {
   }
   return value;
 }
-const memoryStore = globalThis as typeof globalThis & { payPulseOutcomeLearningRepository?: MemoryOutcomeLearningRepository };
-export function getOutcomeLearningRepository(): OutcomeLearningRepository {
+const memoryStore = globalThis as typeof globalThis & { payPulseOutcomeLearningRepositories?: Map<string, MemoryOutcomeLearningRepository> };
+export function getOutcomeLearningRepository(merchantId?: string): OutcomeLearningRepository {
+  const resolvedMerchantId = merchantId ?? (process.env.PAYPULSE_MERCHANT_ID?.trim() || "paypal-sandbox-default");
   if (process.env.DATABASE_URL?.trim()) {
-    return new PostgresOutcomeLearningRepository(
-      toSqlExecutor(getPostgresPool()),
-      process.env.PAYPULSE_MERCHANT_ID?.trim() || "paypal-sandbox-default",
-    );
+    return new PostgresOutcomeLearningRepository(toSqlExecutor(getPostgresPool()), resolvedMerchantId);
   }
-  memoryStore.payPulseOutcomeLearningRepository ??= new MemoryOutcomeLearningRepository();
-  return memoryStore.payPulseOutcomeLearningRepository;
+  assertPersistenceConfigured();
+  if (!canUseMemoryPersistence()) throw new Error("Memory persistence was not explicitly enabled.");
+  const repositories = memoryStore.payPulseOutcomeLearningRepositories ??= new Map();
+  let repository = repositories.get(resolvedMerchantId);
+  if (!repository) {
+    repository = new MemoryOutcomeLearningRepository();
+    repositories.set(resolvedMerchantId, repository);
+  }
+  return repository;
 }

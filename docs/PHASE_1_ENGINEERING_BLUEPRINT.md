@@ -4,8 +4,8 @@
 >
 > **Phase boundary:** This document defines the product and implementation architecture for Phase 1. It intentionally does **not** implement an application or initiate any live payment activity. Every payment integration described here is restricted to **PayPal Sandbox**.
 
-**Status:** Architecture approved for implementation planning  
-**Audience:** Hackathon team, engineering, product/design, and demo presenters  
+**Status:** Architecture approved for implementation planning
+**Audience:** Hackathon team, engineering, product/design, and demo presenters
 **Primary outcome:** An explainable AI payment intelligence agent that produces reviewable action plans—not a dashboard, transaction table, or open-ended chatbot.
 
 ---

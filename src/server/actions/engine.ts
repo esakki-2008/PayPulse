@@ -16,6 +16,15 @@ import type {
 export class AgentActionNotFoundError extends Error { override readonly name = "AgentActionNotFoundError"; }
 export class AgentActionStateError extends Error { override readonly name = "AgentActionStateError"; }
 
+function actionIdForAttempt(fingerprint: string, attempt: number, merchantId?: string): string {
+  // IDs remain opaque to callers and include a stable merchant namespace so
+  // PostgreSQL's globally keyed action table cannot collide across tenants.
+  const merchantNamespace = merchantId ? `${createHash("sha256").update(merchantId).digest("hex").slice(0, 10)}_` : "";
+  return attempt === 1
+    ? `action_${merchantNamespace}${fingerprint.slice(0, 20)}`
+    : `action_${merchantNamespace}${fingerprint.slice(0, 16)}_a${attempt}`;
+}
+
 export interface GeneratedActions {
   readonly actions: readonly ActionCandidate[];
   readonly message: string | null;
@@ -24,14 +33,16 @@ export interface GeneratedActions {
 export async function generateActionsForSource(
   source: DataSource,
   repository: AgentActionRepository = getAgentActionRepository(),
+  merchantId?: string,
 ): Promise<GeneratedActions> {
-  const intelligence = await getIntelligenceForSource(source);
-  return generateActionsFromIntelligence(intelligence.data, repository);
+  const intelligence = await getIntelligenceForSource(source, merchantId);
+  return generateActionsFromIntelligence(intelligence.data, repository, merchantId);
 }
 
 export async function generateActionsFromIntelligence(
   intelligence: DeterministicIntelligence,
   repository: AgentActionRepository = getAgentActionRepository(),
+  merchantId?: string,
 ): Promise<GeneratedActions> {
   const candidates = buildActionCandidates(intelligence);
   if (candidates.length === 0) {
@@ -44,9 +55,18 @@ export async function generateActionsFromIntelligence(
       actions.push(existing);
       continue;
     }
+    const previousAttempts = await repository.listActions(intelligence.source);
+    const latest = previousAttempts
+      .filter((action) => action.fingerprint === candidate.fingerprint)
+      .sort((left, right) => right.attempt - left.attempt || right.createdAt.localeCompare(left.createdAt))[0];
+    // A terminal recommendation can be generated again only as an explicitly
+    // numbered lifecycle. It never overwrites its immutable prior audit trail.
+    const action = latest
+      ? { ...candidate, id: actionIdForAttempt(candidate.fingerprint, latest.attempt + 1, merchantId), attempt: latest.attempt + 1 }
+      : { ...candidate, id: actionIdForAttempt(candidate.fingerprint, 1, merchantId) };
     const creationEvent: AgentActionEvent = {
       id: randomUUID(),
-      actionId: candidate.id,
+      actionId: action.id,
       previousStatus: "proposed",
       newStatus: "proposed",
       actor: "merchant",
@@ -54,7 +74,7 @@ export async function generateActionsFromIntelligence(
       reason: "New action recommendation generated from deterministic evidence.",
       source: intelligence.source,
     };
-    const stored = await repository.saveActionWithEventIfInactive(candidate, creationEvent);
+    const stored = await repository.saveActionWithEventIfInactive(action, creationEvent);
     actions.push(stored.action);
   }
   return { actions, message: null };
@@ -69,6 +89,7 @@ export async function generateActionsFromIntelligence(
 export async function createPayPalSandboxVerificationAction(
   repository: AgentActionRepository = getAgentActionRepository(),
   now = new Date(),
+  merchantId?: string,
 ): Promise<ActionCandidate> {
   const config = getPayPalSandboxOrderConfig();
   const fingerprint = createHash("sha256").update(JSON.stringify({
@@ -81,11 +102,16 @@ export async function createPayPalSandboxVerificationAction(
   })).digest("hex");
   const existing = await repository.findActiveActionByFingerprint("paypal_sandbox", fingerprint);
   if (existing) return existing;
+  const latest = (await repository.listActions("paypal_sandbox"))
+    .filter((action) => action.fingerprint === fingerprint)
+    .sort((left, right) => right.attempt - left.attempt || right.createdAt.localeCompare(left.createdAt))[0];
+  const attempt = (latest?.attempt ?? 0) + 1;
   const createdAt = now.toISOString();
   const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString();
   const action: ActionCandidate = {
-    id: `action_sandbox_payment_${fingerprint.slice(0, 20)}`,
+    id: `action_sandbox_payment_${merchantId ? `${createHash("sha256").update(merchantId).digest("hex").slice(0, 10)}_` : ""}${fingerprint.slice(0, 16)}_a${attempt}`,
     fingerprint,
+    attempt,
     version: 1,
     type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION",
     title: "Verify a PayPal Sandbox payment flow",
@@ -129,17 +155,19 @@ export async function createPayPalSandboxVerificationAction(
 export async function generateActionPlanForSource(
   source: DataSource,
   repository: AgentActionRepository = getAgentActionRepository(),
+  merchantId?: string,
 ): Promise<{ readonly plan: AgentActionPlan | null; readonly message: string | null }> {
-  const intelligence = await getIntelligenceForSource(source);
-  return generateActionPlanFromIntelligence(intelligence.data, repository);
+  const intelligence = await getIntelligenceForSource(source, merchantId);
+  return generateActionPlanFromIntelligence(intelligence.data, repository, merchantId);
 }
 
 export async function generateActionPlanFromIntelligence(
   intelligence: DeterministicIntelligence,
   repository: AgentActionRepository = getAgentActionRepository(),
+  merchantId?: string,
 ): Promise<{ readonly plan: AgentActionPlan | null; readonly message: string | null }> {
   const source = intelligence.source;
-  const generated = await generateActionsFromIntelligence(intelligence, repository);
+  const generated = await generateActionsFromIntelligence(intelligence, repository, merchantId);
   if (generated.actions.length === 0) return { plan: null, message: generated.message };
   const fingerprint = createHash("sha256").update(JSON.stringify({ source, actions: generated.actions.map((action) => action.fingerprint).sort() })).digest("hex");
   const existing = await repository.findPlanByFingerprint(source, fingerprint);
@@ -147,7 +175,7 @@ export async function generateActionPlanFromIntelligence(
   const createdAt = generated.actions.map((action) => action.createdAt).sort().at(-1) ?? new Date().toISOString();
   const expiresAt = generated.actions.map((action) => action.expiresAt).sort().at(0) ?? createdAt;
   const plan: AgentActionPlan = {
-    id: `plan_${fingerprint.slice(0, 20)}`,
+    id: `plan_${merchantId ? `${createHash("sha256").update(merchantId).digest("hex").slice(0, 10)}_` : ""}${fingerprint.slice(0, 20)}`,
     fingerprint,
     source,
     title: "Payment intelligence action review",
@@ -209,7 +237,7 @@ export async function markReadyForExecutionWithEvent(source: DataSource, actionI
 /** Server-only execution lifecycle transition. Merchant routes cannot set it. */
 export async function transitionAgentActionExecution(
   action: ActionCandidate,
-  nextStatus: "executing" | "succeeded" | "failed",
+  nextStatus: "executing" | "unknown" | "succeeded" | "failed",
   reason: string,
   repository: AgentActionRepository = getAgentActionRepository(),
   now?: Date,
@@ -217,8 +245,9 @@ export async function transitionAgentActionExecution(
   const current = await getActionForSource(action.source, action.id, repository, now);
   if (!current) throw new AgentActionNotFoundError("Action not found in the selected data source.");
   if (current.version !== action.version) throw new AgentActionStateError("This action changed during execution. No further operation was attempted.");
-  const valid = (nextStatus === "executing" && current.status === "ready_for_execution")
-    || ((nextStatus === "succeeded" || nextStatus === "failed") && current.status === "executing");
+  const valid = (nextStatus === "executing" && (current.status === "ready_for_execution" || current.status === "unknown"))
+    || (nextStatus === "unknown" && current.status === "executing")
+    || ((nextStatus === "succeeded" || nextStatus === "failed") && (current.status === "executing" || current.status === "unknown"));
   if (!valid) throw new AgentActionStateError("This execution transition is not allowed.");
   const updatedCandidate = { ...current, status: nextStatus, version: current.version + 1 } as ActionCandidate;
   const event: AgentActionEvent = { id: randomUUID(), actionId: current.id, previousStatus: current.status, newStatus: nextStatus, actor: "system", timestamp: new Date().toISOString(), reason, source: current.source };
@@ -255,7 +284,8 @@ async function expireIfNeeded(action: ActionCandidate, repository: AgentActionRe
 async function refreshPlanStatus(plan: AgentActionPlan, repository: AgentActionRepository): Promise<AgentActionPlan> {
   const actions = await Promise.all(plan.actions.map((action) => getActionForSource(plan.source, action.id, repository).then((current) => current ?? action)));
   const status = actions.every((action) => action.status === "succeeded") ? "succeeded"
-    : actions.some((action) => action.status === "executing") ? "executing"
+    : actions.some((action) => action.status === "unknown") ? "unknown"
+      : actions.some((action) => action.status === "executing") ? "executing"
       : actions.some((action) => action.status === "failed") ? "failed"
         : actions.every((action) => action.status === "ready_for_execution") ? "ready_for_execution"
           : actions.some((action) => action.status === "approved") ? "approved"

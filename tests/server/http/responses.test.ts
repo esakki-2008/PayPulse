@@ -14,7 +14,7 @@ describe("PayPal capability response metadata", () => {
     ));
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
       error: "PayPal Sandbox transaction reporting is unavailable for this app or account.",
       meta: {
         source: "paypal_sandbox",

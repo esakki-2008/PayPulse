@@ -13,7 +13,7 @@ import type { ActionCandidate, AgentActionEvent, AgentActionPlan, DataSource } f
 
 const NOW = new Date("2026-10-03T12:00:00.000Z");
 const action: ActionCandidate = {
-  id: "action_sandbox_verify", fingerprint: "v".repeat(64), version: 1,
+  id: "action_sandbox_verify", fingerprint: "v".repeat(64), attempt: 1, version: 1,
   type: "PAYPAL_SANDBOX_PAYMENT_VERIFICATION", title: "Verify a PayPal Sandbox payment flow",
   summary: "Explicit fixed checkout verification.", reason: "Merchant requested verification.",
   severity: "low", confidence: 1, source: "paypal_sandbox", customerIds: [], transactionIds: [],
@@ -41,7 +41,7 @@ class FakeActionRepository implements AgentActionRepository {
   async saveAction(candidate: ActionCandidate) { this.records.set(candidate.id, candidate); return candidate; }
   async listEvents(source: DataSource, id?: string) { return this.events.filter((event) => event.source === source && (!id || event.actionId === id)); }
   async appendEvent(event: AgentActionEvent) { if (!this.events.some((item) => item.id === event.id)) this.events.push(event); }
-  async saveActionWithEventIfInactive(candidate: ActionCandidate, event: AgentActionEvent) { const current = this.records.get(candidate.id); if (current && ["proposed", "approved", "ready_for_execution", "executing"].includes(current.status)) return { action: current, created: false }; this.records.set(candidate.id, candidate); await this.appendEvent(event); return { action: candidate, created: true }; }
+  async saveActionWithEventIfInactive(candidate: ActionCandidate, event: AgentActionEvent) { const current = this.records.get(candidate.id); if (current && ["proposed", "approved", "ready_for_execution", "executing", "unknown"].includes(current.status)) return { action: current, created: false }; this.records.set(candidate.id, candidate); await this.appendEvent(event); return { action: candidate, created: true }; }
   async transitionAction(candidate: ActionCandidate, event: AgentActionEvent) { const current = this.records.get(candidate.id); if (!current || current.version !== candidate.version - 1 || current.status !== event.previousStatus) return null; this.records.set(candidate.id, candidate); await this.appendEvent(event); return candidate; }
   async transitionExecutionAction(candidate: ActionCandidate, event: AgentActionEvent) { return this.transitionAction(candidate, event); }
   async getPlan(): Promise<AgentActionPlan | null> { return null; }
@@ -107,9 +107,20 @@ describe("real Orders v2 execution orchestration", () => {
     const deps = dependencies(orders);
     await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 1 }, deps);
     const result = await completeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id }, deps);
-    expect(result).toMatchObject({ status: 202, action: { status: "executing" }, outcome: { status: "pending", failureCategory: "unknown" } });
+    expect(result).toMatchObject({ status: 202, action: { status: "unknown" }, outcome: { status: "pending", failureCategory: "unknown" } });
     expect(result.learning?.event).toMatchObject({ outcome: "unknown", learningStatus: "unchanged", dnaDelta: null });
     expect(orders.captureCalls).toBe(0);
+  });
+
+  it("reconciles a previously unknown provider state by re-reading the same stored order", async () => {
+    const orders = new FakeOrders([{ ...created, status: "UNKNOWN", providerStatus: "FUTURE_STATUS", approvalUrl: null }, approved, completed]);
+    const deps = dependencies(orders);
+    await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 1 }, deps);
+    const unknown = await completeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id }, deps);
+    expect(unknown).toMatchObject({ action: { status: "unknown" }, outcome: { status: "pending", failureCategory: "unknown" } });
+    const recovered = await completeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id }, deps);
+    expect(recovered).toMatchObject({ status: 200, action: { status: "succeeded" }, outcome: { status: "succeeded" } });
+    expect(orders.captureCalls).toBe(1);
   });
 
   it("records an unavailable post-approval provider response as unknown without capture success or DNA", async () => {
@@ -117,7 +128,7 @@ describe("real Orders v2 execution orchestration", () => {
     const deps = dependencies(orders);
     await executeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id, version: 1 }, deps);
     const result = await completeApprovedPayPalSandboxAction({ source: "paypal_sandbox", actionId: action.id }, deps);
-    expect(result).toMatchObject({ status: 202, action: { status: "executing" }, outcome: { status: "pending", failureCategory: "unknown" } });
+    expect(result).toMatchObject({ status: 202, action: { status: "unknown" }, outcome: { status: "pending", failureCategory: "unknown" } });
     expect(result.learning?.event).toMatchObject({ outcome: "unknown", learningStatus: "unchanged", dnaDelta: null });
   });
 
