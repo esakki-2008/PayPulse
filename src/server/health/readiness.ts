@@ -27,7 +27,7 @@ export async function readinessPayload(): Promise<{ readonly payload: ReadinessP
   const failures = productionRuntime ? [...production.failures] : [];
   if (database !== "ready") failures.push(`database_${database}`);
   if (!orders.available) failures.push("paypal_sandbox_orders_unavailable");
-  const application = failures.some((failure) => failure.startsWith("external_auth") || failure === "database_not_configured") ? "blocked" : "ready";
+  const application = failures.some((failure) => failure.startsWith("external_auth") || failure === "clerk_auth_not_configured" || failure === "database_not_configured") ? "blocked" : "ready";
   const ready = !productionRuntime || (application === "ready" && database === "ready" && orders.available);
   return {
     payload: {

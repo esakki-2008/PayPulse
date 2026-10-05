@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { getAuth } from "@clerk/nextjs/server";
+
 import { assertServerRuntime } from "../runtime";
 
 assertServerRuntime("PayPulse authentication");
@@ -53,9 +55,7 @@ export async function getAuthenticatedActor(request: Request): Promise<Authentic
 
   const mode = process.env.PAYPULSE_AUTH_MODE?.trim().toLowerCase();
   if (mode === DEVELOPMENT_AUTH_MODE) return developmentActorFromRequest(request);
-  if (mode === EXTERNAL_AUTH_MODE) {
-    throw new AuthenticationConfigurationError("An external authentication provider adapter has not been configured.");
-  }
+  if (mode === EXTERNAL_AUTH_MODE) return clerkActorFromRequest(request);
   throw new AuthenticationConfigurationError();
 }
 
@@ -75,6 +75,68 @@ export function createDevelopmentSession(token: string): { readonly value: strin
 }
 
 export function developmentSessionCookieName(): string { return SESSION_COOKIE; }
+
+/**
+ * Converts only server-verified Clerk session claims into the PayPulse actor
+ * contract. The active Clerk Organization is the tenant boundary: its ID is
+ * never read from a browser-supplied PayPulse field.
+ */
+export function actorFromClerkSession(session: {
+  readonly userId: string | null | undefined;
+  readonly orgId: string | null | undefined;
+  readonly orgRole: string | null | undefined;
+}): AuthenticatedActor | null {
+  if (!session.userId) return null;
+  if (!session.orgId) {
+    throw new AuthorizationError("Select an active organization before accessing PayPulse.");
+  }
+  return {
+    actorId: session.userId,
+    merchantId: session.orgId,
+    role: payPulseRoleForClerkOrganizationRole(session.orgRole),
+    provider: "external",
+  };
+}
+
+/**
+ * Unknown and missing Organization roles are intentionally least-privilege.
+ * Clerk's default roles map to owner/viewer; an explicitly configured
+ * `org:operator` role can operate but cannot manage owner-only capabilities.
+ */
+export function payPulseRoleForClerkOrganizationRole(role: string | null | undefined): MerchantRole {
+  switch (role) {
+    case "org:admin":
+      return "owner";
+    case "org:operator":
+      return "operator";
+    case "org:member":
+    default:
+      return "viewer";
+  }
+}
+
+function clerkActorFromRequest(request: Request): AuthenticatedActor | null {
+  if (!isClerkConfigured()) {
+    throw new AuthenticationConfigurationError("Clerk authentication is not configured for this environment.");
+  }
+  try {
+    // Route handlers and server pages pass the standard Web Request shape.
+    // `getAuth` consumes the Clerk-signed middleware headers, which this shape
+    // preserves; the narrower NextRequest type in Clerk's declaration is not
+    // otherwise required by its server-side verification path.
+    return actorFromClerkSession(getAuth(request as Parameters<typeof getAuth>[0]));
+  } catch (error) {
+    if (error instanceof AuthenticationError || error instanceof AuthorizationError) throw error;
+    // This normally means Clerk middleware was not applied to the request.
+    // Do not use a request header or fallback identity in that case.
+    throw new AuthenticationConfigurationError("Clerk authentication middleware is not available for this request.");
+  }
+}
+
+export function isClerkConfigured(): boolean {
+  return Boolean(process.env.CLERK_SECRET_KEY?.trim())
+    && Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim());
+}
 
 function developmentActorFromRequest(request: Request): AuthenticatedActor | null {
   if (process.env.NODE_ENV === "production") {
